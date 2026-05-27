@@ -3,12 +3,12 @@
 // https://console.firebase.google.com
 
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123def456"
+  apiKey: "AIzaSyDm4Y8lIaWe7gTCiy7SV8YTaPyYRMgLIxw",
+  authDomain: "combat-29fb0.firebaseapp.com",
+  projectId: "combat-29fb0",
+  storageBucket: "combat-29fb0.firebasestorage.app",
+  messagingSenderId: "904791328168",
+  appId: "1:904791328168:web:e9dccabf927a5623e0899d"
 };
 
 // Database references (used by firebase.js)
