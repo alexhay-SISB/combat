@@ -1,0 +1,135 @@
+/* ===== Landing Page ===== */
+
+.landing-body {
+  background: radial-gradient(circle at 20% 20%, #2a3e5a 0%, #0a0e14 70%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+}
+
+.landing {
+  width: 100%;
+  max-width: 1100px;
+}
+
+.landing-content {
+  text-align: center;
+}
+
+.landing-title {
+  font-size: 96px;
+  font-weight: 900;
+  letter-spacing: 16px;
+  margin: 0 0 8px;
+  background: linear-gradient(135deg, #ff5252 0%, #ffd54f 50%, #4fc3f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 80px rgba(255, 213, 79, 0.3);
+}
+
+.landing-subtitle {
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: #8a9aa8;
+  text-transform: uppercase;
+  margin-bottom: 60px;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 60px;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 50px 40px;
+  text-decoration: none;
+  color: #e8eef5;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.role-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.5;
+}
+
+.role-card:hover {
+  transform: translateY(-6px);
+  border-color: currentColor;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.student-card { color: #4fc3f7; }
+.teacher-card { color: #ff7043; }
+
+.student-card:hover { background: rgba(79, 195, 247, 0.08); }
+.teacher-card:hover { background: rgba(255, 112, 67, 0.08); }
+
+.role-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  filter: drop-shadow(0 4px 12px currentColor);
+}
+
+.role-card h2 {
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  margin: 0 0 16px;
+  color: currentColor;
+}
+
+.role-card p {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #c0cfdf;
+  margin-bottom: 28px;
+  flex-grow: 1;
+}
+
+.role-cta {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 12px 24px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  color: currentColor;
+  transition: all 0.2s ease;
+}
+
+.role-card:hover .role-cta {
+  background: currentColor;
+  color: #0a0e14;
+}
+
+.landing-footer {
+  font-size: 13px;
+  color: #6a7886;
+  margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+  .landing-title { font-size: 56px; letter-spacing: 8px; }
+  .role-grid { grid-template-columns: 1fr; gap: 20px; }
+  .role-card { padding: 36px 24px; }
+  .role-icon { font-size: 48px; }
+  .role-card h2 { font-size: 24px; letter-spacing: 4px; }
+}

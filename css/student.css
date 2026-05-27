@@ -1,0 +1,195 @@
+/* ===== Student page: lobby + touch controls ===== */
+
+/* === Lobby states === */
+.lobby-content {
+  max-width: 540px;
+}
+
+.lobby-prompt {
+  font-size: 15px;
+  color: #c0cfdf;
+  margin-bottom: 16px;
+}
+
+.lobby-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  padding: 16px 22px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 18px;
+  letter-spacing: 1px;
+}
+
+.lobby-input:focus {
+  outline: none;
+  border-color: #ffd54f;
+  box-shadow: 0 0 20px rgba(255, 213, 79, 0.3);
+}
+
+#lobby-name-state .primary-btn {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+/* === Waiting state === */
+.waiting-pulse {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 20px auto 30px;
+}
+
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #4fc3f7;
+  border-radius: 50%;
+  opacity: 0;
+  animation: pulse-out 2s ease-out infinite;
+}
+.pulse-ring.delay-1 { animation-delay: 0.6s; }
+.pulse-ring.delay-2 { animation-delay: 1.2s; }
+
+@keyframes pulse-out {
+  0% { transform: scale(0.4); opacity: 1; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+.welcome {
+  font-size: 22px;
+  color: #fff;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.welcome b {
+  color: #ffd54f;
+  font-weight: 800;
+}
+
+.lobby-status {
+  font-size: 14px;
+  color: #8a9aa8;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.lobby-info, .round-info {
+  margin: 20px 0;
+  font-size: 13px;
+  color: #c0cfdf;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* === Paired state === */
+.vs-label {
+  font-size: 14px;
+  color: #8a9aa8;
+  margin: 14px 0 14px;
+  letter-spacing: 4px;
+}
+
+.opponent-name {
+  font-size: 36px;
+  font-weight: 900;
+  color: #4fc3f7;
+  letter-spacing: 2px;
+  margin-bottom: 22px;
+  text-shadow: 0 0 30px rgba(79, 195, 247, 0.4);
+}
+
+/* === Touch controls (iPad) === */
+#touch-controls {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+#touch-controls.hidden { display: none; }
+
+.touch-joystick {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  width: 160px;
+  height: 160px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-joystick .joystick-base {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.touch-joystick .joystick-stick {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 213, 79, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 20px rgba(255, 213, 79, 0.5);
+  transition: background 0.1s;
+}
+
+.touch-fire-btn {
+  position: absolute;
+  bottom: 50px;
+  right: 50px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 82, 82, 0.5);
+  border: 4px solid #ff5252;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fff;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 0 30px rgba(255, 82, 82, 0.4);
+  transition: transform 0.05s ease, background 0.05s ease;
+}
+
+.touch-fire-btn.pressed {
+  transform: scale(0.92);
+  background: rgba(255, 82, 82, 0.8);
+}
+
+/* Hide power-up legend on touch devices (limited space) */
+@media (pointer: coarse) {
+  #powerup-legend {
+    font-size: 10px;
+    bottom: auto;
+    top: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+  }
+  #powerup-legend .legend-title { display: none; }
+}
