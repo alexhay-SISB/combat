@@ -1,6 +1,18 @@
 // ===== Entry point (student page) =====
 
-(function () {
+(async function () {
+  // Initialize Firebase
+  if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY') {
+    const success = await Firebase.init(FIREBASE_CONFIG);
+    if (success) {
+      console.log('Firebase connected for multi-device sync');
+    } else {
+      console.warn('Firebase init failed; falling back to localStorage');
+    }
+  } else {
+    console.warn('Firebase config not set; using localStorage only');
+  }
+
   const canvas = document.getElementById('game-canvas');
   Game.init(canvas);
 

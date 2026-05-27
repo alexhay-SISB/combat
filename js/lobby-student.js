@@ -6,6 +6,7 @@ const StudentLobby = {
   myName: null,
   state: 'name',     // 'name' | 'waiting' | 'paired' | 'in_match'
   pollHandle: null,
+  firebaseListenerActive: false,
 
   init() {
     // sessionStorage holds per-tab identity (so multiple tabs are different students)
@@ -58,6 +59,11 @@ const StudentLobby = {
       localStorage.setItem('combat:players', JSON.stringify(players));
     }
     this.myName = name;
+
+    // Also add player to Firebase if available
+    if (Firebase && Firebase.isInitialized()) {
+      Firebase.addPlayer(this.myStudentId, name).catch(e => console.warn('Firebase addPlayer failed:', e));
+    }
 
     sessionStorage.setItem('combat:myStudentId', this.myStudentId);
     sessionStorage.setItem('combat:myName', this.myName);
@@ -134,14 +140,48 @@ const StudentLobby = {
   },
 
   startPolling() {
+    // Set up Firebase listener if available
+    if (Firebase && Firebase.isInitialized() && !this.firebaseListenerActive) {
+      Firebase.listenToPairings((pairingsObj) => {
+        this.handlePairingsUpdate(pairingsObj);
+      });
+      this.firebaseListenerActive = true;
+    }
+
+    // Also keep localStorage polling as fallback
     this.pollHandle = setInterval(() => this.poll(), 500);
     this.poll();
+  },
+
+  handlePairingsUpdate(pairingsObj) {
+    if (!this.myStudentId) return;
+
+    // Find my pair in the Firebase pairings object
+    let myPair = null;
+    Object.values(pairingsObj).forEach(pairing => {
+      if (pairing.p1Id === this.myStudentId || pairing.p2Id === this.myStudentId) {
+        myPair = pairing;
+      }
+    });
+
+    if (myPair) {
+      if (myPair.status === 'done') {
+        if (this.state !== 'waiting') this.enterWaiting();
+      } else if (myPair.status === 'bye') {
+        if (this.state !== 'waiting') this.enterWaiting();
+        document.getElementById('lobby-info').innerHTML = `🎉 You got a <b>BYE</b> for Round ${myPair.round} — auto-advancing!`;
+      } else {
+        if (this.state !== 'paired') this.enterPaired(myPair);
+      }
+    } else {
+      if (this.state === 'paired') this.enterWaiting();
+    }
   },
 
   poll() {
     if (!this.myStudentId) return;
 
-    // Check pairings for my matchup
+    // Check pairings for my matchup (localStorage fallback)
     let pairings = [];
     try { pairings = JSON.parse(localStorage.getItem('combat:pairings') || '[]'); }
     catch (e) { return; }

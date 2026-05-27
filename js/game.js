@@ -460,6 +460,11 @@ const Game = {
       try { broadcastChannel.postMessage(payload); } catch (e) {}
     }
 
+    // Secondary: Firebase (multi-device sync)
+    if (Firebase && Firebase.isInitialized()) {
+      Firebase.broadcastMatchState(matchId, payload).catch(e => console.warn('Firebase broadcast failed:', e));
+    }
+
     // Fallback: localStorage (works on file:// via polling on teacher side)
     try {
       localStorage.setItem('combat:spectate:' + matchId, JSON.stringify(payload));
@@ -569,7 +574,7 @@ const Game = {
     }
   },
 
-  // Save a match's result into the cumulative leaderboard in localStorage.
+  // Save a match's result into the cumulative leaderboard in localStorage & Firebase.
   saveMatchResult(t1, t2, winnerTank, loserTank) {
     let lb = {};
     try {
@@ -595,6 +600,19 @@ const Game = {
     upsert(t2.name, t2.kills, q2, winnerTank === t2, loserTank === t2);
 
     localStorage.setItem('combat:leaderboard', JSON.stringify(lb));
+
+    // Also write to Firebase
+    if (Firebase && Firebase.isInitialized()) {
+      const matchId = localStorage.getItem('combat:currentMatchId') || 'local';
+      Firebase.endMatch(
+        matchId,
+        t1.name,
+        t2.name,
+        winnerTank ? winnerTank.name : null,
+        q1,
+        q2
+      ).catch(e => console.warn('Firebase endMatch failed:', e));
+    }
 
     // Update the pairing in the round (if this match was part of a tournament round)
     const matchId = localStorage.getItem('combat:currentMatchId');

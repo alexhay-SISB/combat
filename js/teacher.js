@@ -226,6 +226,11 @@ const RoundManager = {
   save() {
     localStorage.setItem(STORAGE_KEYS.currentRound, String(this.currentRound));
     localStorage.setItem(STORAGE_KEYS.pairings, JSON.stringify(this.pairings));
+
+    // Also save pairings to Firebase
+    if (Firebase && Firebase.isInitialized()) {
+      Firebase.setPairings(this.pairings).catch(e => console.warn('Firebase setPairings failed:', e));
+    }
   },
 
   wire() {
@@ -381,12 +386,24 @@ const Spectator = {
   lastStateTs: new Map(),  // per-match: last seen ts (to dedupe BC vs LS)
 
   init() {
-    // 1) BroadcastChannel (works over http://, sometimes works over file://)
+    // 1) Firebase listener (multi-device sync, highest priority)
+    if (Firebase && Firebase.isInitialized()) {
+      // Listen for all match states
+      Firebase.db.ref(`tournaments/${Firebase.tournamentId}/matches`).on('child_changed', (snap) => {
+        const matchId = snap.key;
+        const matchData = snap.val();
+        if (matchData && matchData.state) {
+          this.handleMessage(matchData.state, 'firebase');
+        }
+      });
+    }
+
+    // 2) BroadcastChannel (works over http://, sometimes works over file://)
     if (eventChannel) {
       eventChannel.addEventListener('message', (e) => this.handleMessage(e.data));
     }
 
-    // 2) Storage event listener (cross-tab) — works in most browsers
+    // 3) Storage event listener (cross-tab) — works in most browsers
     window.addEventListener('storage', (e) => {
       if (!e.key) return;
       if (e.key.startsWith('combat:spectate:') && e.newValue) {
@@ -394,7 +411,7 @@ const Spectator = {
       }
     });
 
-    // 3) localStorage polling — guaranteed-to-work fallback (file:// safe)
+    // 4) localStorage polling — guaranteed-to-work fallback (file:// safe)
     setInterval(() => this.pollLocalStorage(), 200);
     setInterval(() => this.pruneStale(), 2000);
     this.pollLocalStorage();   // initial scan
@@ -613,6 +630,25 @@ const Teacher = {
     RoundManager.init();
     Spectator.init();
     Leaderboard.render();
+
+    // Firebase listener for leaderboard updates
+    if (Firebase && Firebase.isInitialized()) {
+      Firebase.listenToLeaderboard((leaderboard) => {
+        // Convert Firebase leaderboard to localStorage format for compatibility
+        let lb = {};
+        leaderboard.forEach(player => {
+          lb[player.name] = {
+            wins: player.wins,
+            losses: player.losses,
+            kills: player.kills,
+            quizScore: player.quizScore,
+            rating: player.rating
+          };
+        });
+        localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(lb));
+        Leaderboard.render();
+      });
+    }
 
     // Refresh on tab visibility / cross-tab storage events
     document.addEventListener('visibilitychange', () => {

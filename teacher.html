@@ -167,8 +167,34 @@
     </div>
   </div>
 
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js"></script>
+
+  <!-- Firebase config & manager -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/firebase.js"></script>
+
+  <!-- Teacher scripts -->
   <script src="js/csv.js"></script>
   <script src="js/questions.js"></script>
   <script src="js/teacher.js"></script>
+
+  <!-- Initialize Firebase for teacher dashboard (before DOMContentLoaded fires) -->
+  <script>
+    (async function () {
+      // Initialize Firebase if configured
+      if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY') {
+        const success = await Firebase.init(FIREBASE_CONFIG);
+        if (success) {
+          console.log('Firebase connected for teacher dashboard');
+        } else {
+          console.warn('Firebase init failed; using localStorage only');
+        }
+      } else {
+        console.warn('Firebase config not set; using localStorage only');
+      }
+    })();
+  </script>
 </body>
 </html>

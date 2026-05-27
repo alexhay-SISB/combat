@@ -1,0 +1,122 @@
+═══════════════════════════════════════════════════════════════════════════════
+                      FIREBASE QUICK START (2 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Get Firebase working so multiple iPads can play together
+
+STEP 1: Create Firebase Project (5 min)
+────────────────────────────────────────
+1. Go to https://console.firebase.google.com
+2. Click "Create a project" → name it "combat-game" → Create
+3. Wait for initialization
+
+STEP 2: Set Up Realtime Database (3 min)
+─────────────────────────────────────────
+1. Left menu → "Build" → "Realtime Database"
+2. Click "Create Database"
+3. Choose region closest to you → Next
+4. Select "Start in TEST MODE" → Enable
+
+STEP 3: Get Your Config (2 min)
+────────────────────────────────
+1. Go to "Project Settings" (gear icon, top-left)
+2. Scroll to "Your apps" → Click "</> " icon
+3. If you don't see an app, click "Add app" first
+4. Copy the entire config object that appears
+
+STEP 4: Add to Game (1 min)
+────────────────────────────
+1. Open: /js/firebase-config.js
+2. Replace the FIREBASE_CONFIG object with your config
+3. Save the file
+4. Push to GitHub (if using GitHub Pages)
+
+STEP 5: Test It (Test locally first, then on iPads)
+─────────────────────────────────────────────────
+1. Open your game URL
+2. Open browser console (F12)
+3. Look for: ✅ "Firebase connected for multi-device sync"
+4. If you see ❌ "Firebase config not set", check step 4 again
+
+═══════════════════════════════════════════════════════════════════════════════
+
+WHAT TO LOOK FOR IN CONSOLE (F12 → Console tab):
+
+✅ GOOD SIGNS:
+  "Firebase initialized: default"
+  "Firebase connected for multi-device sync" (teacher)
+  "Firebase connected for multi-device sync" (student)
+
+❌ BAD SIGNS:
+  "Firebase config not set; using localStorage only"
+    → Fix: Check your firebase-config.js has the real config
+
+  "Permission denied" errors
+    → Fix: Enable "Test Mode" in Firebase Console
+
+═══════════════════════════════════════════════════════════════════════════════
+
+YOUR FIREBASE CONFIG (from Firebase Console):
+
+This is what you need to find in Firebase Console → Project Settings:
+
+{
+  "apiKey": "YOUR_KEY_HERE",
+  "authDomain": "your-project.firebaseapp.com",
+  "projectId": "your-project",
+  "storageBucket": "your-project.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abc123def456"
+}
+
+Copy this EXACTLY into /js/firebase-config.js
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TESTING ON IPADS:
+
+1. Teacher: Open https://your-domain/combat/index.html on laptop
+           → Click "Teacher"
+
+2. Student 1: Open https://your-domain/combat/index.html on iPad 1
+              → Click "Student"
+              → Enter name: "Player 1"
+
+3. Student 2: Open https://your-domain/combat/index.html on iPad 2
+              → Click "Student"
+              → Enter name: "Player 2"
+
+4. Teacher: Add both players to lobby, then "Start Round 1"
+
+5. Check: iPad 1 and iPad 2 should BOTH show they're paired
+         (This should happen instantly if Firebase is working)
+
+If pairings appear in <1 second: ✅ Firebase is working!
+If pairings take >2 seconds: It's using localStorage fallback (still works, just slower)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+
+Q: "Firebase config not set" in console
+A: Check firebase-config.js — it should NOT have "YOUR_API_KEY"
+
+Q: Pairings don't sync to iPads
+A:
+  1. Try refreshing the student iPad page
+  2. Check Firebase Console → Realtime Database → Are any rules shown?
+     If not, make sure you clicked "Enable" when creating the database
+  3. Check browser console for "Permission denied" errors
+
+Q: Everything works on one computer, but not across iPads
+A: Make sure your game URL is https:// (not http://) if on public internet
+   Firebase requires HTTPS for security
+
+═══════════════════════════════════════════════════════════════════════════════
+
+NEED MORE HELP?
+
+See: FIREBASE_SETUP.md (full setup guide with screenshots)
+See: FIREBASE_INTEGRATION.md (technical details)
+
+═══════════════════════════════════════════════════════════════════════════════
