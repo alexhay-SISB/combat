@@ -497,6 +497,16 @@ const Game = {
     this.tanks[0].points = p1StartPoints;
     this.tanks[1].points = p2StartPoints;
 
+    // Cheat code: "Alex Hay" gets 10000 points (1000 of each ammo type)
+    if (p1Name === 'ALEX HAY') {
+      this.tanks[0].points = 10000;
+      console.log('[Game] 🎮 CHEAT CODE ACTIVATED: Alex Hay (P1) given 10000 points');
+    }
+    if (p2Name === 'ALEX HAY') {
+      this.tanks[1].points = 10000;
+      console.log('[Game] 🎮 CHEAT CODE ACTIVATED: Alex Hay (P2) given 10000 points');
+    }
+
     this.bullets = [];
     this.powerups = [];
     this.powerupsSpawned = 0;
