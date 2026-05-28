@@ -5,6 +5,8 @@
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDm4Y8lIaWe7gTCiy7SV8YTaPyYRMgLIxw",
   authDomain: "combat-29fb0.firebaseapp.com",
+  // Realtime Database in Asia Southeast 1 region
+  databaseURL: "https://combat-29fb0-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "combat-29fb0",
   storageBucket: "combat-29fb0.firebasestorage.app",
   messagingSenderId: "904791328168",

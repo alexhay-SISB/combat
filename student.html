@@ -181,27 +181,27 @@
     <!-- ===== Results overlay (reuses lobby overlay container, swapped at runtime) ===== -->
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js"></script>
+  <!-- Firebase SDK (compat = v8-style API exposed as window.firebase) -->
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
-  <!-- Firebase config & manager -->
-  <script src="js/firebase-config.js"></script>
-  <script src="js/firebase.js"></script>
+  <!-- Firebase config & manager (v=2 cache-bust) -->
+  <script src="js/firebase-config.js?v=2"></script>
+  <script src="js/firebase.js?v=2"></script>
 
   <!-- Game scripts -->
-  <script src="js/utils.js"></script>
-  <script src="js/questions.js"></script>
-  <script src="js/quiz.js"></script>
-  <script src="js/map.js"></script>
-  <script src="js/bullet.js"></script>
-  <script src="js/powerup.js"></script>
-  <script src="js/tank.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/touch.js"></script>
-  <script src="js/renderer.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/lobby-student.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/utils.js?v=2"></script>
+  <script src="js/questions.js?v=2"></script>
+  <script src="js/quiz.js?v=2"></script>
+  <script src="js/map.js?v=2"></script>
+  <script src="js/bullet.js?v=2"></script>
+  <script src="js/powerup.js?v=2"></script>
+  <script src="js/tank.js?v=2"></script>
+  <script src="js/input.js?v=2"></script>
+  <script src="js/touch.js?v=2"></script>
+  <script src="js/renderer.js?v=2"></script>
+  <script src="js/game.js?v=2"></script>
+  <script src="js/lobby-student.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
 </body>
 </html>

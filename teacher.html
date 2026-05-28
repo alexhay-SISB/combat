@@ -167,34 +167,35 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js"></script>
+  <!-- Firebase SDK (compat = v8-style API exposed as window.firebase) -->
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
-  <!-- Firebase config & manager -->
-  <script src="js/firebase-config.js"></script>
-  <script src="js/firebase.js"></script>
+  <!-- Firebase config & manager (v=2 cache-bust) -->
+  <script src="js/firebase-config.js?v=2"></script>
+  <script src="js/firebase.js?v=2"></script>
 
   <!-- Teacher scripts -->
-  <script src="js/csv.js"></script>
-  <script src="js/questions.js"></script>
-  <script src="js/teacher.js"></script>
+  <script src="js/csv.js?v=2"></script>
+  <script src="js/questions.js?v=2"></script>
+  <script src="js/teacher.js?v=2"></script>
 
-  <!-- Initialize Firebase for teacher dashboard (before DOMContentLoaded fires) -->
+  <!-- Initialize Firebase for teacher dashboard BEFORE Teacher.init() -->
   <script>
-    (async function () {
-      // Initialize Firebase if configured
-      if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY') {
-        const success = await Firebase.init(FIREBASE_CONFIG);
-        if (success) {
-          console.log('Firebase connected for teacher dashboard');
-        } else {
-          console.warn('Firebase init failed; using localStorage only');
+    // Synchronous init since compat SDK is synchronous.
+    // Important: this must run before the DOMContentLoaded handler in teacher.js
+    if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY' && window.firebase) {
+      Firebase.init(FIREBASE_CONFIG).then(ok => {
+        console.log(ok ? '%c[Teacher] Firebase ✓' : '%c[Teacher] Firebase FAILED',
+                    ok ? 'color:#4caf50;font-weight:bold' : 'color:#f44336;font-weight:bold');
+        // If Teacher already initialized (DOMContentLoaded fired first), wire Firebase listeners now
+        if (window.Teacher && typeof Teacher.attachFirebaseListeners === 'function') {
+          Teacher.attachFirebaseListeners();
         }
-      } else {
-        console.warn('Firebase config not set; using localStorage only');
-      }
-    })();
+      });
+    } else {
+      console.warn('Firebase config not set or SDK missing; using localStorage only');
+    }
   </script>
 </body>
 </html>

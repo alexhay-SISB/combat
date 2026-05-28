@@ -394,17 +394,8 @@ const Spectator = {
   lastStateTs: new Map(),  // per-match: last seen ts (to dedupe BC vs LS)
 
   init() {
-    // 1) Firebase listener (multi-device sync, highest priority)
-    if (Firebase && Firebase.isInitialized()) {
-      // Listen for all match states
-      Firebase.db.ref(`tournaments/${Firebase.tournamentId}/matches`).on('child_changed', (snap) => {
-        const matchId = snap.key;
-        const matchData = snap.val();
-        if (matchData && matchData.state) {
-          this.handleMessage(matchData.state, 'firebase');
-        }
-      });
-    }
+    // 1) Firebase listener (multi-device sync, highest priority) — may be deferred
+    this.attachFirebase();
 
     // 2) BroadcastChannel (works over http://, sometimes works over file://)
     if (eventChannel) {
@@ -423,6 +414,21 @@ const Spectator = {
     setInterval(() => this.pollLocalStorage(), 200);
     setInterval(() => this.pruneStale(), 2000);
     this.pollLocalStorage();   // initial scan
+  },
+
+  _firebaseAttached: false,
+  attachFirebase() {
+    if (this._firebaseAttached) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
+    this._firebaseAttached = true;
+    console.log('[Spectator] ✓ Firebase listener attached for live matches');
+    Firebase.db.ref(`tournaments/${Firebase.tournamentId}/matches`).on('child_changed', (snap) => {
+      const matchId = snap.key;
+      const matchData = snap.val();
+      if (matchData && matchData.state) {
+        this.handleMessage(matchData.state, 'firebase');
+      }
+    });
   },
 
   handleMessage(msg, source = 'bc') {
@@ -639,24 +645,9 @@ const Teacher = {
     Spectator.init();
     Leaderboard.render();
 
-    // Firebase listener for leaderboard updates
-    if (Firebase && Firebase.isInitialized()) {
-      Firebase.listenToLeaderboard((leaderboard) => {
-        // Convert Firebase leaderboard to localStorage format for compatibility
-        let lb = {};
-        leaderboard.forEach(player => {
-          lb[player.name] = {
-            wins: player.wins,
-            losses: player.losses,
-            kills: player.kills,
-            quizScore: player.quizScore,
-            rating: player.rating
-          };
-        });
-        localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(lb));
-        Leaderboard.render();
-      });
-    }
+    // Attach Firebase listeners now if it's already initialized;
+    // otherwise the init script in teacher.html will call this once Firebase comes online.
+    this.attachFirebaseListeners();
 
     // Refresh on tab visibility / cross-tab storage events
     document.addEventListener('visibilitychange', () => {
@@ -676,6 +667,54 @@ const Teacher = {
         this.refreshAll();
       }
     }, 500);
+  },
+
+  _firebaseAttached: false,
+  attachFirebaseListeners() {
+    if (this._firebaseAttached) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) {
+      // Retry shortly — Firebase init is async
+      setTimeout(() => this.attachFirebaseListeners(), 300);
+      return;
+    }
+    this._firebaseAttached = true;
+    console.log('[Teacher] ✓ Firebase listeners attached');
+
+    // Re-init spectator's Firebase hook now that it's available
+    if (typeof Spectator !== 'undefined' && Spectator.attachFirebase) {
+      Spectator.attachFirebase();
+    }
+
+    Firebase.listenToLeaderboard((leaderboard) => {
+      // Convert Firebase leaderboard to localStorage format for compatibility
+      let lb = {};
+      leaderboard.forEach(player => {
+        lb[player.name] = {
+          wins: player.wins,
+          losses: player.losses,
+          kills: player.kills,
+          quizScore: player.quizScore,
+          rating: player.rating
+        };
+      });
+      localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(lb));
+      Leaderboard.render();
+    });
+
+    // Listen to the players list so the teacher sees students appear in real time
+    Firebase.db.ref(`tournaments/${Firebase.tournamentId}/players`).on('value', (snap) => {
+      const data = snap.val() || {};
+      const players = Object.entries(data).map(([id, p]) => ({ id, name: p.name, joinedAt: Date.now() }));
+      const merged = [...Lobby.players];
+      for (const p of players) {
+        if (!merged.some(m => m.name.toLowerCase() === p.name.toLowerCase())) {
+          merged.push(p);
+        }
+      }
+      Lobby.players = merged;
+      Lobby.save();
+      Lobby.render();
+    });
   },
 
   refreshAll() {

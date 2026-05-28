@@ -141,17 +141,31 @@ const StudentLobby = {
   },
 
   startPolling() {
-    // Set up Firebase listener if available
-    if (Firebase && Firebase.isInitialized() && !this.firebaseListenerActive) {
-      Firebase.listenToPairings((pairingsObj) => {
-        this.handlePairingsUpdate(pairingsObj);
-      });
-      this.firebaseListenerActive = true;
-    }
+    // Try to set up Firebase listener now (and retry every poll if not yet ready)
+    this.tryAttachFirebaseListener();
 
     // Also keep localStorage polling as fallback
-    this.pollHandle = setInterval(() => this.poll(), 500);
+    this.pollHandle = setInterval(() => {
+      this.tryAttachFirebaseListener();  // retry until Firebase is ready
+      this.poll();
+    }, 500);
     this.poll();
+  },
+
+  tryAttachFirebaseListener() {
+    if (this.firebaseListenerActive) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
+
+    console.log('[Lobby] ✓ Attaching Firebase listener for pairings');
+    Firebase.listenToPairings((pairingsObj) => {
+      this.handlePairingsUpdate(pairingsObj);
+    });
+    this.firebaseListenerActive = true;
+
+    // Also (re)add this player to Firebase, in case they joined before Firebase came online
+    if (this.myStudentId && this.myName) {
+      Firebase.addPlayer(this.myStudentId, this.myName).catch(e => console.warn('Firebase addPlayer (late) failed:', e));
+    }
   },
 
   handlePairingsUpdate(pairingsObj) {

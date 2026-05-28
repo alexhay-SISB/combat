@@ -681,6 +681,12 @@ const Game = {
 
     if (!this.tanks || this.tanks.length === 0) return;
 
+    // Diagnostic: log first received state so user can verify sync is working
+    if (!this._firstStateLogged) {
+      this._firstStateLogged = true;
+      console.log('%c[Client] ✓ Receiving state from host', 'color: #4caf50; font-weight: bold', state);
+    }
+
     // Apply tank positions, angles, kills, points, alive status
     if (state.tanks && Array.isArray(state.tanks)) {
       for (let i = 0; i < state.tanks.length && i < this.tanks.length; i++) {
@@ -724,6 +730,14 @@ const Game = {
     if (typeof state.time === 'number') {
       this.timeRemaining = state.time;
     }
+
+    // Apply powerups (render-only on client)
+    if (state.powerups && Array.isArray(state.powerups) && typeof PowerUp !== 'undefined') {
+      this.powerups = state.powerups.map(p => {
+        const pu = new PowerUp(p.x, p.y, p.type);
+        return pu;
+      });
+    }
   },
 
   broadcastState() {
@@ -745,6 +759,9 @@ const Game = {
       bullets: this.bullets.map(b => ({
         x: Math.round(b.x), y: Math.round(b.y), type: b.type
       })),
+      powerups: this.powerups.map(p => ({
+        x: Math.round(p.x), y: Math.round(p.y), type: p.type
+      })),
       ts: Date.now()
     };
 
@@ -755,6 +772,10 @@ const Game = {
 
     // Secondary: Firebase (multi-device sync)
     if (Firebase && Firebase.isInitialized()) {
+      if (!this._firstBroadcastLogged) {
+        this._firstBroadcastLogged = true;
+        console.log('%c[Host] ✓ Broadcasting state to Firebase', 'color: #4caf50; font-weight: bold', `match=${matchId}`);
+      }
       Firebase.broadcastMatchState(matchId, payload).catch(e => console.warn('Firebase broadcast failed:', e));
     }
 

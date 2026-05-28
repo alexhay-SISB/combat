@@ -11,22 +11,46 @@ class FirebaseManager {
 
   // Initialize Firebase (called from student.html and teacher.html)
   async init(config) {
-    if (this.initialized) return;
+    if (this.initialized) return true;
 
     try {
-      // Import Firebase modules (global scope after SDK <script> tags)
-      if (!window.firebase) {
-        console.warn('Firebase SDK not loaded. Check <script> tags in HTML.');
+      // The compat SDK exposes `firebase` on window.
+      if (!window.firebase || !firebase.initializeApp) {
+        console.error('[Firebase] SDK not loaded as compat — check that the HTML uses firebase-app-compat.js and firebase-database-compat.js.');
         return false;
       }
 
-      await firebase.initializeApp(config);
+      // initializeApp is synchronous in compat SDK; no await needed
+      firebase.initializeApp(config);
       this.db = firebase.database();
       this.initialized = true;
-      console.log('Firebase initialized:', this.tournamentId);
+      console.log('[Firebase] ✓ initialized — tournament:', this.tournamentId);
+
+      // Connection ping — proves RTDB is actually reachable (not just SDK loaded)
+      this.db.ref('.info/connected').on('value', (snap) => {
+        const connected = !!snap.val();
+        console.log(`[Firebase] RTDB connection: ${connected ? '✓ ONLINE' : '✗ OFFLINE'}`);
+        const badge = document.getElementById('fb-status-badge');
+        if (badge) {
+          badge.textContent = connected ? '● MULTI-DEVICE' : '● RECONNECTING…';
+          badge.style.background = connected ? 'rgba(76,175,80,0.9)' : 'rgba(255,152,0,0.95)';
+        }
+      });
+
       return true;
     } catch (e) {
-      console.error('Firebase init error:', e);
+      // If "Firebase App named '[DEFAULT]' already exists", treat as initialized
+      if (String(e).includes('already exists')) {
+        try {
+          this.db = firebase.database();
+          this.initialized = true;
+          console.log('[Firebase] ✓ already initialized — reusing app');
+          return true;
+        } catch (e2) {
+          console.error('[Firebase] init recover failed:', e2);
+        }
+      }
+      console.error('[Firebase] init error:', e);
       return false;
     }
   }
