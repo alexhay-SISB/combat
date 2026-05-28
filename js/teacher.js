@@ -250,6 +250,14 @@ const RoundManager = {
 
     this.currentRound++;
     this.pairings = this.createPairings();
+
+    // Auto-launch all non-bye matches — students will start on their own devices
+    this.pairings.forEach(p => {
+      if (p.status !== 'bye') {
+        p.status = 'in_progress';
+      }
+    });
+
     this.save();
     this.render();
   },
@@ -297,16 +305,16 @@ const RoundManager = {
     const pair = this.pairings.find(p => p.matchId === matchId);
     if (!pair || pair.status === 'done' || pair.status === 'bye') return;
 
-    // Save match info for game.js to read
+    // Save match info for fallback (single-device mode)
     localStorage.setItem(STORAGE_KEYS.p1Name, pair.p1Name);
     localStorage.setItem(STORAGE_KEYS.p2Name, pair.p2Name);
     localStorage.setItem(STORAGE_KEYS.currentMatchId, matchId);
 
     pair.status = 'in_progress';
-    this.save();
+    this.save(); // Writes to Firebase too — students will detect and auto-launch
     this.render();
 
-    window.open('student.html', '_blank');
+    // No window.open() — students launch on their own devices via Firebase listener
   },
 
   reset() {

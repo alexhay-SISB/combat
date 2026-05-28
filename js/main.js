@@ -22,15 +22,10 @@
     TouchInput.init();
   }
 
-  // If the teacher dashboard launched us via "Play" (currentMatchId is set),
-  // auto-start the quiz with the teacher's configured timers.
-  const launchedFromTeacher = localStorage.getItem('combat:currentMatchId');
-  if (launchedFromTeacher) {
-    const quizSecs = parseInt(localStorage.getItem('combat:quizTimer') || '60');
-    const combatSecs = parseInt(localStorage.getItem('combat:combatTimer') || '120');
-    Game.startQuiz(quizSecs, combatSecs);
-  }
-  // Else: the StudentLobby script handles the lobby UI / waiting state.
+  // NOTE: We no longer auto-start the quiz from main.js.
+  // The StudentLobby detects when teacher starts the round and calls
+  // Game.startQuiz() on the student's own device. This enables true
+  // multi-device gameplay (each student plays on their own iPad).
 
   // Quiz "END QUIZ" button
   const endBtn = document.getElementById('quiz-skip-btn');

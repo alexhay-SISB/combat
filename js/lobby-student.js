@@ -7,6 +7,7 @@ const StudentLobby = {
   state: 'name',     // 'name' | 'waiting' | 'paired' | 'in_match'
   pollHandle: null,
   firebaseListenerActive: false,
+  launchedMatchId: null,  // tracks which match we've already launched (prevents re-launching)
 
   init() {
     // sessionStorage holds per-tab identity (so multiple tabs are different students)
@@ -164,18 +165,7 @@ const StudentLobby = {
       }
     });
 
-    if (myPair) {
-      if (myPair.status === 'done') {
-        if (this.state !== 'waiting') this.enterWaiting();
-      } else if (myPair.status === 'bye') {
-        if (this.state !== 'waiting') this.enterWaiting();
-        document.getElementById('lobby-info').innerHTML = `🎉 You got a <b>BYE</b> for Round ${myPair.round} — auto-advancing!`;
-      } else {
-        if (this.state !== 'paired') this.enterPaired(myPair);
-      }
-    } else {
-      if (this.state === 'paired') this.enterWaiting();
-    }
+    this.processMyPair(myPair);
   },
 
   poll() {
@@ -190,22 +180,75 @@ const StudentLobby = {
       p.p1Id === this.myStudentId || p.p2Id === this.myStudentId
     );
 
+    this.processMyPair(myPair);
+
+    if (!myPair && this.state === 'waiting') {
+      this.updateLobbyInfo();
+    }
+  },
+
+  // Shared logic for both Firebase and localStorage paths
+  processMyPair(myPair) {
     if (myPair) {
-      // I'm in a pairing
       if (myPair.status === 'done') {
-        // Match was already played; back to waiting
         if (this.state !== 'waiting') this.enterWaiting();
       } else if (myPair.status === 'bye') {
-        // I got a bye
         if (this.state !== 'waiting') this.enterWaiting();
         document.getElementById('lobby-info').innerHTML = `🎉 You got a <b>BYE</b> for Round ${myPair.round} — auto-advancing!`;
+      } else if (myPair.status === 'in_progress') {
+        // Match is starting — auto-launch the game!
+        if (this.launchedMatchId !== myPair.matchId) {
+          this.launchedMatchId = myPair.matchId;
+          this.launchGame(myPair);
+        }
       } else {
-        // pending / ready / in_progress
+        // 'pending' or other status — show paired state, waiting to start
         if (this.state !== 'paired') this.enterPaired(myPair);
       }
     } else {
       if (this.state === 'paired') this.enterWaiting();
-      this.updateLobbyInfo();
+    }
+  },
+
+  // Launch the game on THIS device for this pairing
+  launchGame(pair) {
+    this.state = 'in_match';
+
+    // Determine which player I am
+    const myPlayerNum = (pair.p1Id === this.myStudentId) ? 1 : 2;
+    const opponentName = myPlayerNum === 1 ? pair.p2Name : pair.p1Name;
+    const opponentId = myPlayerNum === 1 ? pair.p2Id : pair.p1Id;
+
+    // Save match info to localStorage for game.js to read
+    localStorage.setItem('combat:currentMatchId', pair.matchId);
+    localStorage.setItem('combat:p1Name', pair.p1Name);
+    localStorage.setItem('combat:p2Name', pair.p2Name);
+    localStorage.setItem('combat:p1Id', pair.p1Id);
+    localStorage.setItem('combat:p2Id', pair.p2Id);
+    localStorage.setItem('combat:myPlayerNum', String(myPlayerNum));
+    localStorage.setItem('combat:opponentName', opponentName);
+    localStorage.setItem('combat:opponentId', opponentId);
+    localStorage.setItem('combat:isHost', myPlayerNum === 1 ? '1' : '0');
+
+    // Hide the lobby overlay
+    const lobbyOverlay = document.getElementById('lobby-overlay');
+    if (lobbyOverlay) lobbyOverlay.classList.add('hidden');
+
+    // Start the quiz on this device
+    const quizSecs = parseInt(localStorage.getItem('combat:quizTimer') || '60');
+    const combatSecs = parseInt(localStorage.getItem('combat:combatTimer') || '120');
+
+    // Set body class so CSS can hide opponent's quiz panel
+    document.body.classList.add('playing-as-p' + myPlayerNum);
+
+    // Trigger game start
+    if (typeof Game !== 'undefined' && Game.startQuiz) {
+      // Re-detect network role NOW that localStorage has match info
+      if (Game.detectNetworkRole) Game.detectNetworkRole();
+      Game.startQuiz(quizSecs, combatSecs);
+    } else {
+      console.error('Game not ready yet — reloading page to start match');
+      location.reload();
     }
   },
 

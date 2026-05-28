@@ -43,6 +43,17 @@ const Game = {
   powerupsSpawned: 0,
   nextPowerupTime: 0,
 
+  // ===== Network state =====
+  // 'local' = single device (both players keyboard); 'host' = P1 device; 'client' = P2 device
+  networkRole: 'local',
+  myPlayerNum: 0,           // 1 if host, 2 if client, 0 if local
+  matchId: null,
+  remoteInput: { forward: false, backward: false, left: false, right: false, firePressed: false, ammoType: 'bullet' },
+  lastInputSent: 0,         // throttle for client → Firebase
+  opponentQuizScore: null,  // received from Firebase
+  remoteFireCounter: 0,     // tracks edge transitions on fire button
+  lastRemoteFireCounter: 0,
+
   init(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -52,7 +63,45 @@ const Game = {
     this.setupAmmoButtons();
     this.setupQuizInput();
     this.applyTeacherSettings();
+    this.detectNetworkRole();
     window.addEventListener('resize', () => this.resize());
+  },
+
+  // Detect host/client/local role from localStorage (set by StudentLobby)
+  detectNetworkRole() {
+    const myPlayerNum = parseInt(localStorage.getItem('combat:myPlayerNum') || '0');
+    const matchId = localStorage.getItem('combat:currentMatchId');
+    const firebaseReady = (typeof Firebase !== 'undefined' && Firebase.isInitialized());
+
+    if (myPlayerNum && matchId && firebaseReady) {
+      this.myPlayerNum = myPlayerNum;
+      this.matchId = matchId;
+      this.networkRole = (myPlayerNum === 1) ? 'host' : 'client';
+      console.log(`Network role: ${this.networkRole} (player ${myPlayerNum}), match: ${matchId}`);
+
+      // Host listens for client's input
+      if (this.networkRole === 'host') {
+        Firebase.listenToInput(matchId, 2, (input) => {
+          this.remoteInput = input;
+        });
+      }
+
+      // Client listens for host's broadcast state to render
+      if (this.networkRole === 'client') {
+        Firebase.listenToMatchState(matchId, (state) => {
+          this.applyRemoteState(state);
+        });
+      }
+
+      // Both listen for quiz scores
+      Firebase.listenToQuizScores(matchId, (scores) => {
+        this.handleQuizScores(scores);
+      });
+    } else {
+      this.networkRole = 'local';
+      this.myPlayerNum = 0;
+      console.log('Network role: local (single-device mode)');
+    }
   },
 
   // Read settings stored by the teacher dashboard (localStorage)
@@ -131,6 +180,23 @@ const Game = {
       const p2Keys = ['h', 'j', 'k', 'l'];
       const p1Idx = p1Keys.indexOf(k);
       const p2Idx = p2Keys.indexOf(k);
+
+      // In networked mode, only local player's keys answer
+      // Also accept 1-4 keys as universal answer keys for local player
+      const num = parseInt(k);
+      if (this.networkRole !== 'local') {
+        if (num >= 1 && num <= 4) {
+          this.answerQuiz(this.myPlayerNum, num - 1);
+          e.preventDefault();
+          return;
+        }
+        // Allow either set of keys to control local player (touch-friendly)
+        if (this.myPlayerNum === 1 && p1Idx >= 0) { this.answerQuiz(1, p1Idx); e.preventDefault(); }
+        if (this.myPlayerNum === 2 && p2Idx >= 0) { this.answerQuiz(2, p2Idx); e.preventDefault(); }
+        return;
+      }
+
+      // Local (single-device) mode: split keys
       if (p1Idx >= 0) { this.answerQuiz(1, p1Idx); e.preventDefault(); }
       if (p2Idx >= 0) { this.answerQuiz(2, p2Idx); e.preventDefault(); }
     });
@@ -152,6 +218,7 @@ const Game = {
     this.quizTimeLimit = quizSeconds;
     this.quizTimeRemaining = quizSeconds;
     this.matchTime = combatSeconds;
+    this.opponentQuizScore = null;
 
     const bank = window.LOADED_QUESTIONS || TEST_QUESTIONS;
     this.quizzes[0] = new Quiz(1, bank);
@@ -164,11 +231,19 @@ const Game = {
     const lobby = document.getElementById('lobby-overlay');
     if (lobby) lobby.classList.add('hidden');
 
-    this.renderQuizPanel(1);
-    this.renderQuizPanel(2);
+    // In networked mode, only render the LOCAL player's quiz panel
+    if (this.networkRole !== 'local') {
+      this.renderQuizPanel(this.myPlayerNum);
+    } else {
+      this.renderQuizPanel(1);
+      this.renderQuizPanel(2);
+    }
   },
 
   answerQuiz(player, optionIndex) {
+    // In networked mode, can only answer for local player
+    if (this.networkRole !== 'local' && player !== this.myPlayerNum) return;
+
     const quiz = this.quizzes[player - 1];
     if (!quiz || !quiz.canAnswer()) return;
     quiz.answer(optionIndex);
@@ -267,9 +342,12 @@ const Game = {
       return;
     }
 
-    // Update each quiz; re-render when state changes (feedback ends, read-time ends, countdown ticks)
-    for (let i = 0; i < 2; i++) {
+    // In networked mode, only update the LOCAL player's quiz
+    const playerIndices = (this.networkRole !== 'local') ? [this.myPlayerNum - 1] : [0, 1];
+
+    for (const i of playerIndices) {
       const q = this.quizzes[i];
+      if (!q) continue;
       const hadFeedback = !!q.feedback;
       const wasReading = q.readTime > 0;
       const oldFeedbackSecs = q.feedback ? Math.ceil(q.feedback.timeLeft) : -1;
@@ -296,11 +374,88 @@ const Game = {
   },
 
   endQuiz() {
+    // In networked mode: send my score to Firebase, wait for opponent's score
+    if (this.networkRole !== 'local') {
+      const myScore = this.quizzes[this.myPlayerNum - 1].score;
+
+      // Send my score to Firebase
+      if (typeof Firebase !== 'undefined' && Firebase.isInitialized()) {
+        Firebase.sendQuizScore(this.matchId, this.myPlayerNum, myScore);
+      }
+
+      // If we already have opponent's score, start match. Otherwise wait.
+      if (this.opponentQuizScore !== null) {
+        this.startNetworkedMatch();
+      } else {
+        // Show "waiting for opponent" overlay
+        this.showWaitingForOpponent();
+      }
+      return;
+    }
+
+    // Local (single-device) mode: simple flow
     document.getElementById('quiz-overlay').classList.add('hidden');
-    // Carry scores forward as ammo budgets
     const p1Points = this.quizzes[0].score;
     const p2Points = this.quizzes[1].score;
     this.startMatch(p1Points, p2Points);
+  },
+
+  // Called when both quiz scores have been received
+  startNetworkedMatch() {
+    document.getElementById('quiz-overlay').classList.add('hidden');
+    this.hideWaitingForOpponent();
+    const myScore = this.quizzes[this.myPlayerNum - 1].score;
+    const oppScore = this.opponentQuizScore;
+    const p1Score = (this.myPlayerNum === 1) ? myScore : oppScore;
+    const p2Score = (this.myPlayerNum === 2) ? myScore : oppScore;
+    this.startMatch(p1Score, p2Score);
+  },
+
+  showWaitingForOpponent() {
+    let el = document.getElementById('waiting-opponent-overlay');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'waiting-opponent-overlay';
+      el.className = 'overlay';
+      el.innerHTML = `
+        <div class="overlay-content">
+          <h1>⏳ Waiting…</h1>
+          <p class="subtitle">Waiting for your opponent to finish their quiz</p>
+          <div class="waiting-pulse">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring delay-1"></div>
+            <div class="pulse-ring delay-2"></div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(el);
+    } else {
+      el.classList.remove('hidden');
+    }
+    document.getElementById('quiz-overlay').classList.add('hidden');
+  },
+
+  hideWaitingForOpponent() {
+    const el = document.getElementById('waiting-opponent-overlay');
+    if (el) el.classList.add('hidden');
+  },
+
+  handleQuizScores(scores) {
+    if (!scores) return;
+    const opponentNum = (this.myPlayerNum === 1) ? 2 : 1;
+    const oppScore = scores[`p${opponentNum}`];
+    if (oppScore !== undefined && oppScore !== null) {
+      this.opponentQuizScore = oppScore;
+
+      // If my quiz already ended AND I'm waiting, start match now
+      const myQuiz = this.quizzes[this.myPlayerNum - 1];
+      const myScoreSent = (myQuiz && this.quizTimeRemaining <= 0) ||
+                          (scores[`p${this.myPlayerNum}`] !== undefined);
+      if (myScoreSent && this.state === 'quiz') {
+        // Both quizzes have submitted scores — start combat
+        this.startNetworkedMatch();
+      }
+    }
   },
 
   // ===== Combat =====
@@ -350,15 +505,47 @@ const Game = {
 
     this.input.update();
 
+    // ===== CLIENT MODE: don't simulate; just send input to Firebase =====
+    if (this.networkRole === 'client') {
+      this.sendInputToHost();
+      // Particles still update so visual effects look smooth
+      this.particles.update(dt);
+      if (this.shakeAmount > 0) this.shakeAmount = Math.max(0, this.shakeAmount - dt * 30);
+      this.updateHUD();
+      return;
+    }
+
+    // ===== HOST / LOCAL MODE: full simulation =====
+
     this.timeRemaining -= dt;
     if (this.timeRemaining <= 0) {
       this.timeRemaining = 0;
       this.endMatch();
     }
 
-    this.tanks[0].update(dt, this.input.p1, this.gameMap);
-    this.tanks[1].update(dt, this.input.p2, this.gameMap);
+    // In host mode, override input.p2 with remote input from client
+    let p1Input = this.input.p1;
+    let p2Input = this.input.p2;
+    if (this.networkRole === 'host') {
+      // The client (p2) sends their input via Firebase — use it for tank 2
+      p2Input = {
+        forward: !!this.remoteInput.forward,
+        backward: !!this.remoteInput.backward,
+        left: !!this.remoteInput.left,
+        right: !!this.remoteInput.right,
+        touchTarget: this.remoteInput.touchTarget || null,
+      };
+      // Apply ammo type from remote if changed
+      if (this.remoteInput.ammoType && this.tanks[1] &&
+          this.tanks[1].ammoType !== this.remoteInput.ammoType) {
+        this.tanks[1].setAmmoType(this.remoteInput.ammoType);
+      }
+    }
 
+    this.tanks[0].update(dt, p1Input, this.gameMap);
+    this.tanks[1].update(dt, p2Input, this.gameMap);
+
+    // Fire handling: tank 1 from local input, tank 2 from remote (or local in 'local' mode)
     if (this.input.consumeFire(1)) {
       const b = this.tanks[0].tryFire(this.bullets);
       if (b) {
@@ -366,7 +553,18 @@ const Game = {
         this.shakeAmount = Math.max(this.shakeAmount, 2);
       }
     }
-    if (this.input.consumeFire(2)) {
+    let p2FireFlag = false;
+    if (this.networkRole === 'host') {
+      // Edge-detect remote fire counter — each new value = one fire press
+      if (this.remoteInput && this.remoteInput.fireCounter !== undefined &&
+          this.remoteInput.fireCounter !== this.lastRemoteFireCounter) {
+        this.lastRemoteFireCounter = this.remoteInput.fireCounter;
+        p2FireFlag = true;
+      }
+    } else {
+      p2FireFlag = this.input.consumeFire(2);
+    }
+    if (p2FireFlag) {
       const b = this.tanks[1].tryFire(this.bullets);
       if (b) {
         this.particles.spark(b.x, b.y, AMMO_TYPES[b.type].color);
@@ -437,7 +635,91 @@ const Game = {
     }
   },
 
+  // CLIENT: send local input to Firebase (host applies it to Tank 2)
+  sendInputToHost() {
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
+    const now = performance.now();
+    if (now - this.lastInputSent < 50) return; // throttle ~20Hz
+    this.lastInputSent = now;
+
+    // Pull local input — in client mode, "p1" (WASD) or touch controls the local tank
+    // We combine both keyboard layouts (WASD + arrows) and touch
+    const localInput = {
+      forward: this.input.p1.forward || this.input.p2.forward,
+      backward: this.input.p1.backward || this.input.p2.backward,
+      left: this.input.p1.left || this.input.p2.left,
+      right: this.input.p1.right || this.input.p2.right,
+      touchTarget: this.input.p1.touchTarget || null,
+    };
+
+    // Edge-detect fire: increment counter on each new press
+    if (this.input.consumeFire(1) || this.input.consumeFire(2)) {
+      this._fireCounter = (this._fireCounter || 0) + 1;
+    }
+    localInput.fireCounter = this._fireCounter || 0;
+
+    // Local tank's ammo type (set via ammo buttons)
+    if (this.tanks[1]) localInput.ammoType = this.tanks[1].ammoType;
+
+    Firebase.sendInput(this.matchId, this.myPlayerNum, localInput);
+  },
+
+  // CLIENT: apply game state received from host (renders host's authoritative state)
+  applyRemoteState(state) {
+    if (this.networkRole !== 'client' || !state) return;
+    if (this.state !== 'combat') return; // ignore state before combat starts
+
+    if (!this.tanks || this.tanks.length === 0) return;
+
+    // Apply tank positions, angles, kills, points, alive status
+    if (state.tanks && Array.isArray(state.tanks)) {
+      for (let i = 0; i < state.tanks.length && i < this.tanks.length; i++) {
+        const t = state.tanks[i];
+        const local = this.tanks[i];
+        if (!t || !local) continue;
+        local.x = t.x;
+        local.y = t.y;
+        local.angle = t.angle;
+        local.kills = t.kills;
+        local.points = t.points;
+        local.alive = t.alive;
+        local.shielded = t.shielded;
+        local.frozen = t.frozen;
+      }
+    }
+
+    // Apply bullets — recreate lightweight versions for rendering
+    if (state.bullets && Array.isArray(state.bullets)) {
+      // Lazy-create or update render-only bullets
+      this.bullets = state.bullets.map(b => {
+        const ammo = (typeof AMMO_TYPES !== 'undefined') ? AMMO_TYPES[b.type] : null;
+        return {
+          x: b.x, y: b.y, type: b.type,
+          def: ammo || { color: '#fff', size: 4 },
+          alive: true,
+          // Stub draw method
+          draw: function(ctx) {
+            ctx.save();
+            ctx.fillStyle = this.def.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.def.size || 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        };
+      });
+    }
+
+    // Apply timer
+    if (typeof state.time === 'number') {
+      this.timeRemaining = state.time;
+    }
+  },
+
   broadcastState() {
+    // Client doesn't broadcast — it receives state from host
+    if (this.networkRole === 'client') return;
+
     const matchId = localStorage.getItem('combat:currentMatchId') || 'local';
     const payload = {
       type: 'state-update',

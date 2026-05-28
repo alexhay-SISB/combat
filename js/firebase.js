@@ -148,6 +148,58 @@ class FirebaseManager {
     });
   }
 
+  // ===== Player Input (Client sends, Host reads) =====
+
+  async sendInput(matchId, playerNum, input) {
+    if (!this.db) return false;
+    try {
+      // playerNum: 1 or 2
+      await this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}/inputs/p${playerNum}`).set({
+        ...input,
+        ts: Date.now()
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  listenToInput(matchId, playerNum, callback) {
+    if (!this.db) return;
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}/inputs/p${playerNum}`);
+    const listener = ref.on('value', (snap) => {
+      const data = snap.val();
+      if (data) callback(data);
+    });
+    this.listeners.set(`input:${matchId}:p${playerNum}`, {
+      unsubscribe: () => ref.off('value', listener)
+    });
+  }
+
+  // ===== Quiz Scores (Each device writes own, both read) =====
+
+  async sendQuizScore(matchId, playerNum, score) {
+    if (!this.db) return false;
+    try {
+      await this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}/quizScores/p${playerNum}`).set(score);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  listenToQuizScores(matchId, callback) {
+    if (!this.db) return;
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}/quizScores`);
+    const listener = ref.on('value', (snap) => {
+      const data = snap.val() || {};
+      callback({ p1: data.p1, p2: data.p2 });
+    });
+    this.listeners.set(`quizScores:${matchId}`, {
+      unsubscribe: () => ref.off('value', listener)
+    });
+  }
+
   // ===== Match Results (Game writes, Teacher reads for leaderboard) =====
 
   async endMatch(matchId, p1, p2, winner, p1Score, p2Score) {

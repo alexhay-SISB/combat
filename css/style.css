@@ -573,6 +573,25 @@ html, body {
   min-height: 0;
 }
 
+/* Multi-device mode: only show the local player's quiz panel */
+body.playing-as-p1 .quiz-split,
+body.playing-as-p2 .quiz-split {
+  grid-template-columns: 1fr;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+body.playing-as-p1 #quiz-p2 { display: none !important; }
+body.playing-as-p2 #quiz-p1 { display: none !important; }
+
+/* Hide opponent's ammo selector — each device only controls own tank */
+body.playing-as-p1 #p2-ammo { display: none !important; }
+body.playing-as-p2 #p1-ammo { display: none !important; }
+
+/* Hide the dual-controls footer hint in multi-device mode */
+body.playing-as-p1 .quiz-footer,
+body.playing-as-p2 .quiz-footer { display: none !important; }
+
 .quiz-panel {
   background: rgba(255, 255, 255, 0.03);
   border: 2px solid rgba(255, 255, 255, 0.06);
