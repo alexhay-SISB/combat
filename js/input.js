@@ -21,7 +21,21 @@ class InputManager {
   }
 
   setupKeyboard() {
+    // When the user is typing in an input/textarea, the game must NOT intercept keys.
+    // Otherwise space (fire), enter, numbers (ammo), and arrows get swallowed.
+    const isTypingInField = (e) => {
+      const t = e.target;
+      if (!t) return false;
+      const tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (t.isContentEditable) return true;
+      return false;
+    };
+
     window.addEventListener('keydown', (e) => {
+      // Let text inputs receive their keystrokes — including space, enter, digits.
+      if (isTypingInField(e)) return;
+
       const k = e.key.toLowerCase();
       this.keys.add(k);
 
@@ -44,6 +58,7 @@ class InputManager {
     });
 
     window.addEventListener('keyup', (e) => {
+      if (isTypingInField(e)) return;
       this.keys.delete(e.key.toLowerCase());
     });
   }
