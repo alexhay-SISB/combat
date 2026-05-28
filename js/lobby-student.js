@@ -10,16 +10,24 @@ const StudentLobby = {
   launchedMatchId: null,  // tracks which match we've already launched (prevents re-launching)
 
   init() {
-    // sessionStorage holds per-tab identity (so multiple tabs are different students)
-    this.myStudentId = sessionStorage.getItem('combat:myStudentId');
-    this.myName = sessionStorage.getItem('combat:myName');
+    // On EVERY page load (including refresh) start fresh at the name entry screen.
+    // We no longer auto-restore from sessionStorage — that caused refreshes to
+    // resurrect a stale identity and show "people in the lobby" the user didn't
+    // expect. The previous name is pre-filled into the input as a convenience.
+    const previousName = sessionStorage.getItem('combat:myName') || '';
 
-    if (this.myStudentId && this.myName) {
-      // Already joined — go straight to waiting state
-      this.enterWaiting();
-    } else {
-      this.enterNameEntry();
-    }
+    // Clear any stale identity so a refresh acts as a clean rejoin.
+    sessionStorage.removeItem('combat:myStudentId');
+    sessionStorage.removeItem('combat:myName');
+    this.myStudentId = null;
+    this.myName = null;
+
+    this.enterNameEntry();
+
+    // Pre-fill the input with last name typed in this tab (convenience only — they
+    // still have to click "Join" to enter the lobby).
+    const input = document.getElementById('lobby-name-input');
+    if (input && previousName) input.value = previousName;
 
     this.wire();
     this.startPolling();

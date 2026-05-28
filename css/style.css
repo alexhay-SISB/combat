@@ -317,6 +317,18 @@ html, body {
   pointer-events: none;
 }
 
+/* Generic utility: any element with .hidden is removed from layout.
+   Lobby state switching (name-entry, waiting, paired) depends on this. */
+.hidden {
+  display: none !important;
+}
+
+/* Re-allow overlays to keep their fade-out transition (display:none would skip it).
+   The .overlay.hidden rule above already handles overlays via opacity. */
+.overlay.hidden {
+  display: flex !important;
+}
+
 .overlay-content {
   text-align: center;
   max-width: 700px;
