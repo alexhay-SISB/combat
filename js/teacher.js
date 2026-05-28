@@ -759,11 +759,33 @@ const Teacher = {
     document.getElementById('t-combat-timer').value = combatT;
   },
 
-  wipeEverything() {
-    const msg = 'DELETE EVERYTHING? This will permanently clear all:\n- Players & lobby list\n- All game records & leaderboard\n- Pairings & rounds\n- Custom question bank\n- Game settings\n\nThis action cannot be undone.';
+  async wipeEverything() {
+    const msg = 'DELETE EVERYTHING? This will permanently clear all:\n- Players & lobby list\n- All game records & leaderboard\n- Pairings & rounds\n- Custom question bank\n- Game settings\n- Firebase tournament data (multi-device)\n\nThis action cannot be undone.';
     if (!confirm(msg)) return;
 
-    // Clear all localStorage keys starting with 'combat:'
+    const btn = document.getElementById('wipe-everything-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Wiping…'; }
+
+    // 1. Clear Firebase FIRST so listeners don't re-populate localStorage as we clear it
+    //    Also temporarily detach listeners to be doubly safe.
+    let firebaseCleared = false;
+    if (typeof Firebase !== 'undefined' && Firebase.isInitialized()) {
+      try {
+        // Detach all listeners so they don't fire while we wipe
+        Firebase.unlistenAll();
+        this._firebaseAttached = false;
+        if (typeof Spectator !== 'undefined') Spectator._firebaseAttached = false;
+
+        // Wipe entire tournament node in Firebase RTDB
+        await Firebase.clearTournament();
+        firebaseCleared = true;
+        console.log('[Teacher] ✓ Firebase tournament cleared');
+      } catch (e) {
+        console.warn('[Teacher] Firebase clear failed:', e);
+      }
+    }
+
+    // 2. Clear all localStorage keys starting with 'combat:'
     const keysToDelete = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -773,18 +795,37 @@ const Teacher = {
     }
     keysToDelete.forEach(key => localStorage.removeItem(key));
 
-    // Reset to defaults
+    // 3. Clear sessionStorage too (per-tab match state)
+    const sessionKeys = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith('combat:')) sessionKeys.push(key);
+    }
+    sessionKeys.forEach(key => sessionStorage.removeItem(key));
+
+    // 4. Reset in-memory state for all modules
+    Lobby.players = [];
+    RoundManager.currentRound = 0;
+    RoundManager.pairings = [];
     this.questions = TEST_QUESTIONS;
     this.questionsLabel = `Built-in test bank (${TEST_QUESTIONS.length} questions)`;
-    this.renderBankStatus();
 
-    // Refresh all UI
+    // 5. Re-render everything to reflect the empty state
+    this.renderBankStatus();
     Lobby.render();
     RoundManager.render();
     Leaderboard.render();
 
+    // 6. Re-attach Firebase listeners (they were detached in step 1)
+    if (typeof Firebase !== 'undefined' && Firebase.isInitialized()) {
+      setTimeout(() => this.attachFirebaseListeners(), 500);
+    }
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '🗑 WIPE EVERYTHING'; }
     console.log('[Teacher] 🗑 Wiped everything! All data cleared.');
-    alert('✓ All data has been cleared. The dashboard has been reset to defaults.');
+    alert(firebaseCleared
+      ? '✓ All data has been cleared (local + Firebase). Dashboard reset.'
+      : '✓ Local data cleared. (Firebase was unavailable — re-run to clear cloud data when connected.)');
   },
 
   wireEvents() {

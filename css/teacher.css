@@ -50,22 +50,37 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.header-actions {
+/* === Wipe Everything button (centered) === */
+.wipe-bar {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  justify-content: center;
+  margin: 0 0 28px 0;
 }
 
-.danger-btn {
-  background: rgba(244, 67, 54, 0.15) !important;
-  color: #ff6b6b !important;
-  border: 1px solid rgba(244, 67, 54, 0.3) !important;
+.wipe-btn {
+  background: linear-gradient(135deg, #c62828 0%, #f44336 100%);
+  color: #fff;
+  border: 2px solid rgba(255, 100, 100, 0.6);
+  padding: 14px 38px;
+  border-radius: 10px;
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 2.5px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(244, 67, 54, 0.35);
   transition: all 0.2s ease;
+  text-transform: uppercase;
+  font-family: inherit;
 }
 
-.danger-btn:hover {
-  background: rgba(244, 67, 54, 0.25) !important;
-  box-shadow: 0 0 12px rgba(244, 67, 54, 0.4) !important;
+.wipe-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(244, 67, 54, 0.55);
+  background: linear-gradient(135deg, #d32f2f 0%, #ef5350 100%);
+}
+
+.wipe-btn:active {
+  transform: translateY(0);
 }
 
 .open-game-btn {
