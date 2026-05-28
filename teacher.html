@@ -21,69 +21,40 @@
 
     <div class="teacher-grid">
 
-      <!-- ===== Top row: Questions + Settings ===== -->
-      <section class="card questions-card">
-        <h2><span class="card-icon">📝</span> Questions</h2>
-        <div id="bank-status" class="status-row"><span class="status-pill">Loading…</span></div>
-
-        <div class="upload-zone">
-          <input type="file" id="csv-file" accept=".csv,text/csv" hidden />
-          <label for="csv-file" class="file-drop-label">
-            <div class="drop-icon">⬆</div>
-            <div class="drop-text"><b>Click to upload CSV</b><br>or drag & drop here</div>
-          </label>
-        </div>
-
-        <div class="upload-actions">
-          <button id="use-test-bank" class="ghost-btn">Use built-in test bank</button>
-          <button id="download-sample" class="ghost-btn">Download sample CSV</button>
-        </div>
-
-        <div id="csv-errors" class="error-list"></div>
-
-        <details class="format-help">
-          <summary>CSV format help</summary>
-          <p>Required columns (in order):</p>
-          <pre><code>question_text, answer_1, answer_2, answer_3, answer_4, correct_answer, difficulty, subject</code></pre>
-          <p>Example row:</p>
-          <pre><code>What is 2+2?, 3, 4, 5, 6, 4, easy, Math</code></pre>
-          <ul>
-            <li><b>correct_answer</b> — full answer text OR a 1-4 number</li>
-            <li><b>difficulty</b> — <code>easy</code> (1pt) or <code>hard</code> (2pt)</li>
-            <li>Header row optional (auto-detected)</li>
-          </ul>
-        </details>
-
-        <div id="question-preview" class="question-preview"></div>
+      <!-- ===== TOP: Leaderboard ===== -->
+      <section class="card leaderboard-card full-width">
+        <h2>
+          <span class="card-icon">🏆</span> Leaderboard
+          <div class="card-actions">
+            <button id="refresh-lb" class="ghost-btn small">↻ Refresh</button>
+            <button id="reset-leaderboard" class="ghost-btn small">Reset stats</button>
+          </div>
+        </h2>
+        <table id="leaderboard-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Player</th>
+              <th>Wins</th>
+              <th>Losses</th>
+              <th>Total Kills</th>
+              <th>Total Quiz Score</th>
+              <th>Rating</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body"></tbody>
+        </table>
+        <p class="empty-state" id="lb-empty">No matches played yet. Open the game and play a round!</p>
       </section>
 
-      <section class="card settings-card">
-        <h2><span class="card-icon">⚙️</span> Round Settings</h2>
-
-        <div class="setting-row">
-          <label for="t-quiz-timer">Quiz timer</label>
-          <select id="t-quiz-timer">
-            <option value="30">30 seconds</option>
-            <option value="60" selected>60 seconds</option>
-            <option value="90">90 seconds</option>
-            <option value="120">2 minutes</option>
-            <option value="180">3 minutes</option>
-          </select>
-        </div>
-
-        <div class="setting-row">
-          <label for="t-combat-timer">Combat timer</label>
-          <select id="t-combat-timer">
-            <option value="60">1 minute</option>
-            <option value="120" selected>2 minutes</option>
-            <option value="180">3 minutes</option>
-            <option value="240">4 minutes</option>
-          </select>
-        </div>
-
-        <p class="settings-hint">
-          These settings apply to <b>all matches</b> in the next round. Change them between rounds to scale difficulty.
-        </p>
+      <!-- ===== Live Spectator (3×2 grid) ===== -->
+      <section class="card spectator-card full-width" id="spectator-section" style="display:none;">
+        <h2>
+          <span class="card-icon">👁</span> Live Matches
+          <span class="live-pill">LIVE</span>
+        </h2>
+        <p class="spectator-hint">Showing up to 6 active matches in real-time.</p>
+        <div id="spectator-grid" class="spectator-grid"></div>
       </section>
 
       <!-- ===== Players (Lobby) ===== -->
@@ -128,40 +99,70 @@
         </div>
       </section>
 
-      <!-- ===== Live Spectator (3×2 grid) ===== -->
-      <section class="card spectator-card full-width" id="spectator-section" style="display:none;">
-        <h2>
-          <span class="card-icon">👁</span> Live Matches
-          <span class="live-pill">LIVE</span>
-        </h2>
-        <p class="spectator-hint">Showing up to 6 active matches in real-time. Open the game in another tab to spectate.</p>
-        <div id="spectator-grid" class="spectator-grid"></div>
+      <!-- ===== BOTTOM: Questions ===== -->
+      <section class="card questions-card full-width">
+        <h2><span class="card-icon">📝</span> Questions</h2>
+        <div id="bank-status" class="status-row"><span class="status-pill">Loading…</span></div>
+
+        <div class="upload-zone">
+          <input type="file" id="csv-file" accept=".csv,text/csv" hidden />
+          <label for="csv-file" class="file-drop-label">
+            <div class="drop-icon">⬆</div>
+            <div class="drop-text"><b>Click to upload CSV</b><br>or drag & drop here</div>
+          </label>
+        </div>
+
+        <div class="upload-actions">
+          <button id="use-test-bank" class="ghost-btn">Use built-in test bank</button>
+          <button id="download-sample" class="ghost-btn">Download sample CSV</button>
+        </div>
+
+        <div id="csv-errors" class="error-list"></div>
+
+        <details class="format-help">
+          <summary>CSV format help</summary>
+          <p>Required columns (in order):</p>
+          <pre><code>question_text, answer_1, answer_2, answer_3, answer_4, correct_answer, difficulty, subject</code></pre>
+          <p>Example row:</p>
+          <pre><code>What is 2+2?, 3, 4, 5, 6, 4, easy, Math</code></pre>
+          <ul>
+            <li><b>correct_answer</b> — full answer text OR a 1-4 number</li>
+            <li><b>difficulty</b> — <code>easy</code> (1pt) or <code>hard</code> (2pt)</li>
+            <li>Header row optional (auto-detected)</li>
+          </ul>
+        </details>
       </section>
 
-      <!-- ===== Leaderboard ===== -->
-      <section class="card leaderboard-card full-width">
-        <h2>
-          <span class="card-icon">🏆</span> Leaderboard
-          <div class="card-actions">
-            <button id="refresh-lb" class="ghost-btn small">↻ Refresh</button>
-            <button id="reset-leaderboard" class="ghost-btn small">Reset stats</button>
+      <!-- ===== BOTTOM: Round Settings ===== -->
+      <section class="card settings-card full-width">
+        <h2><span class="card-icon">⚙️</span> Round Settings</h2>
+
+        <div class="settings-row-wrap">
+          <div class="setting-row">
+            <label for="t-quiz-timer">Quiz timer</label>
+            <select id="t-quiz-timer">
+              <option value="30">30 seconds</option>
+              <option value="60" selected>60 seconds</option>
+              <option value="90">90 seconds</option>
+              <option value="120">2 minutes</option>
+              <option value="180">3 minutes</option>
+            </select>
           </div>
-        </h2>
-        <table id="leaderboard-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Player</th>
-              <th>Wins</th>
-              <th>Losses</th>
-              <th>Total Kills</th>
-              <th>Total Quiz Score</th>
-              <th>Rating</th>
-            </tr>
-          </thead>
-          <tbody id="leaderboard-body"></tbody>
-        </table>
-        <p class="empty-state" id="lb-empty">No matches played yet. Open the game and play a round!</p>
+
+          <div class="setting-row">
+            <label for="t-combat-timer">Combat timer</label>
+            <select id="t-combat-timer">
+              <option value="60">1 minute</option>
+              <option value="120" selected>2 minutes</option>
+              <option value="180">3 minutes</option>
+              <option value="240">4 minutes</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="settings-hint">
+          These settings apply to <b>all matches</b> in the next round. Change them between rounds to scale difficulty.
+        </p>
       </section>
 
     </div>
@@ -172,13 +173,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
   <!-- Firebase config & manager (v=2 cache-bust) -->
-  <script src="js/firebase-config.js?v=2"></script>
-  <script src="js/firebase.js?v=2"></script>
+  <script src="js/firebase-config.js?v=3"></script>
+  <script src="js/firebase.js?v=3"></script>
 
   <!-- Teacher scripts -->
-  <script src="js/csv.js?v=2"></script>
-  <script src="js/questions.js?v=2"></script>
-  <script src="js/teacher.js?v=2"></script>
+  <script src="js/csv.js?v=3"></script>
+  <script src="js/questions.js?v=3"></script>
+  <script src="js/teacher.js?v=3"></script>
 
   <!-- Initialize Firebase for teacher dashboard BEFORE Teacher.init() -->
   <script>

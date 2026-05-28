@@ -638,7 +638,6 @@ const Teacher = {
     this.loadFromStorage();
     this.wireEvents();
     this.renderBankStatus();
-    this.renderQuestionPreview();
 
     Lobby.init();
     RoundManager.init();
@@ -772,7 +771,6 @@ const Teacher = {
       localStorage.removeItem(STORAGE_KEYS.questions);
       localStorage.removeItem(STORAGE_KEYS.questionsLabel);
       this.renderBankStatus();
-      this.renderQuestionPreview();
     });
 
     document.getElementById('download-sample').addEventListener('click', () => {
@@ -823,7 +821,6 @@ const Teacher = {
       localStorage.setItem(STORAGE_KEYS.questions, JSON.stringify(questions));
       localStorage.setItem(STORAGE_KEYS.questionsLabel, this.questionsLabel);
       this.renderBankStatus();
-      this.renderQuestionPreview();
     };
     reader.readAsText(file);
   },
@@ -839,23 +836,6 @@ const Teacher = {
     `;
   },
 
-  renderQuestionPreview() {
-    const el = document.getElementById('question-preview');
-    if (!this.questions || this.questions.length === 0) { el.innerHTML = ''; return; }
-    const preview = this.questions.slice(0, 5).map((q, i) => `
-      <div class="preview-row">
-        <div class="preview-meta">
-          <span class="preview-num">${i + 1}</span>
-          <span class="diff-pill ${q.difficulty}">${q.difficulty === 'hard' ? 'HARD · 2pt' : 'EASY · 1pt'}</span>
-          ${q.subject ? `<span class="subject-pill">${q.subject}</span>` : ''}
-        </div>
-        <div class="preview-q">${q.text}</div>
-        <div class="preview-a">✓ ${q.options[q.correct]}</div>
-      </div>
-    `).join('');
-    const more = this.questions.length > 5 ? `<div class="preview-more">+ ${this.questions.length - 5} more…</div>` : '';
-    el.innerHTML = `<h3>Preview (first 5)</h3>${preview}${more}`;
-  },
 };
 
 document.addEventListener('DOMContentLoaded', () => Teacher.init());

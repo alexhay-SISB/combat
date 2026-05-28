@@ -323,6 +323,15 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.settings-row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-bottom: 8px;
 }
 
 .setting-row label {
