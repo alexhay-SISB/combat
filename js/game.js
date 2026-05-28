@@ -1135,6 +1135,13 @@ const Game = {
     } catch (e) { lb = {}; }
 
     const upsert = (name, deltaKills, deltaQuiz, isWin, isLoss) => {
+      // Defensive: never save an entry for an invalid name. This was the source
+      // of mysterious "undefined" rows in the leaderboard.
+      if (typeof name !== 'string' || name.trim().length === 0 ||
+          name === 'undefined' || name === 'null') {
+        console.warn('[Game] saveMatchResult: skipping invalid player name:', name);
+        return;
+      }
       const entry = lb[name] || { kills: 0, wins: 0, losses: 0, quizScore: 0 };
       entry.kills = (entry.kills || 0) + deltaKills;
       entry.quizScore = (entry.quizScore || 0) + deltaQuiz;
@@ -1157,8 +1164,12 @@ const Game = {
     const matchId = sessionStorage.getItem('combat:currentMatchId') ||
                     localStorage.getItem('combat:currentMatchId');
 
-    // Also write to Firebase — but ONLY host (or local) writes results to avoid duplicates
-    if (Firebase && Firebase.isInitialized() && this.networkRole !== 'client') {
+    // Also write to Firebase — but ONLY host (or local) writes results to avoid duplicates.
+    // Guard against invalid names so we never create players/undefined entries.
+    const validName = (n) => typeof n === 'string' && n.trim().length > 0 &&
+                              n !== 'undefined' && n !== 'null';
+    if (Firebase && Firebase.isInitialized() && this.networkRole !== 'client' &&
+        validName(t1.name) && validName(t2.name)) {
       Firebase.endMatch(
         matchId || 'local',
         t1.name,
@@ -1167,6 +1178,8 @@ const Game = {
         q1,
         q2
       ).catch(e => console.warn('Firebase endMatch failed:', e));
+    } else if (!validName(t1.name) || !validName(t2.name)) {
+      console.warn('[Game] Skipping Firebase endMatch — invalid tank name(s):', t1.name, t2.name);
     }
 
     // Update the pairing in the round (if this match was part of a tournament round)

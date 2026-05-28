@@ -37,6 +37,22 @@ const Leaderboard = {
     const empty = document.getElementById('lb-empty');
     const data = this.getData();
 
+    // Auto-purge invalid entries ("undefined", empty strings, etc.) so they
+    // disappear from the leaderboard AND don't keep coming back on next save.
+    const validName = (n) => typeof n === 'string' && n.trim().length > 0 &&
+                              n !== 'undefined' && n !== 'null';
+    let purged = false;
+    for (const key of Object.keys(data)) {
+      if (!validName(key)) {
+        delete data[key];
+        purged = true;
+      }
+    }
+    if (purged) {
+      localStorage.setItem('combat:leaderboard', JSON.stringify(data));
+      console.log('[Leaderboard] Purged invalid entries from leaderboard');
+    }
+
     const players = Object.entries(data).map(([name, stats]) => ({
       name, ...stats, rating: this.computeRating(stats),
     }));
@@ -690,9 +706,17 @@ const Teacher = {
     }
 
     Firebase.listenToLeaderboard((leaderboard) => {
-      // Convert Firebase leaderboard to localStorage format for compatibility
+      // Convert Firebase leaderboard to localStorage format for compatibility.
+      // Defensive: skip any player record with a missing/invalid name so we don't
+      // create lb["undefined"] entries.
+      const validName = (n) => typeof n === 'string' && n.trim().length > 0 &&
+                                n !== 'undefined' && n !== 'null';
       let lb = {};
       leaderboard.forEach(player => {
+        if (!player || !validName(player.name)) {
+          console.warn('[Teacher] Skipping leaderboard entry with invalid name:', player);
+          return;
+        }
         lb[player.name] = {
           wins: player.wins,
           losses: player.losses,
