@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v13';
+const LOBBY_VERSION = 'v14';
 
 const StudentLobby = {
   myStudentId: null,
@@ -12,6 +12,7 @@ const StudentLobby = {
   pollHandle: null,
   firebaseListenerActive: false,
   leaderboardListenerActive: false,
+  questionsListenerActive: false,
   _lastLeaderboard: null,    // cached latest snapshot — used to repaint after returnToLobby
   launchedMatchId: null,  // tracks which match we've already launched (prevents re-launching)
   _originalLobbyHTML: null, // cached so we can restore it after a match overwrites the overlay
@@ -216,6 +217,31 @@ const StudentLobby = {
         this.renderLeaderboard(leaderboard);
       });
       this.leaderboardListenerActive = true;
+    }
+
+    // Subscribe to the teacher-published question bank. Whenever the teacher
+    // uploads a CSV (or switches back to the test bank), we mirror it into THIS
+    // device's localStorage so Game.applyTeacherSettings() picks it up at the
+    // next quiz start. Without this, students fall back to TEST_QUESTIONS.
+    if (!this.questionsListenerActive && typeof Firebase.listenToQuestions === 'function') {
+      console.log('[Lobby] ✓ Attaching Firebase listener for question bank');
+      Firebase.listenToQuestions((questions, label) => {
+        if (questions && questions.length > 0) {
+          try {
+            localStorage.setItem('combat:questions', JSON.stringify(questions));
+            if (label) localStorage.setItem('combat:questionsLabel', label);
+            console.log(`[Lobby] ✓ Received ${questions.length} questions from teacher (${label || 'no label'})`);
+            // If a Game object exists, re-apply settings so a *next* quiz uses
+            // the new bank immediately. (Quiz already in flight keeps its set.)
+            if (typeof Game !== 'undefined' && typeof Game.applyTeacherSettings === 'function') {
+              Game.applyTeacherSettings();
+            }
+          } catch (e) {
+            console.warn('[Lobby] Failed to cache questions locally:', e);
+          }
+        }
+      });
+      this.questionsListenerActive = true;
     }
   },
 

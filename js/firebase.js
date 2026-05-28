@@ -324,6 +324,44 @@ class FirebaseManager {
     });
   }
 
+  // ===== Question Bank (Teacher writes, Students read) =====
+  // The teacher uploads a CSV on one device — that device pushes the parsed
+  // questions to Firebase, and every student device subscribes to receive
+  // them. Without this, students fall back to TEST_QUESTIONS.
+
+  async setQuestions(questions, label) {
+    if (!this.db) return false;
+    try {
+      await this.db.ref(`tournaments/${this.tournamentId}/questionBank`).set({
+        questions: questions || [],
+        label: label || `Custom (${(questions || []).length} questions)`,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      return true;
+    } catch (e) {
+      console.error('Failed to set question bank:', e);
+      return false;
+    }
+  }
+
+  listenToQuestions(callback) {
+    if (!this.db) return;
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/questionBank`);
+    const listener = ref.on('value', (snap) => {
+      const data = snap.val();
+      if (data && Array.isArray(data.questions) && data.questions.length > 0) {
+        callback(data.questions, data.label || '');
+      } else {
+        callback(null, '');
+      }
+    }, (err) => {
+      console.error('Question bank listener error:', err);
+    });
+    this.listeners.set('questionBank', {
+      unsubscribe: () => ref.off('value', listener)
+    });
+  }
+
   // ===== Utility =====
 
   async clearTournament() {

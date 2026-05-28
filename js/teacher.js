@@ -777,10 +777,27 @@ const Teacher = {
       this.questionsLabel = `Built-in test bank (${TEST_QUESTIONS.length} questions)`;
     }
 
+    // Push the current question bank to Firebase so all student devices receive
+    // it. Without this, only the teacher's device has the questions and remote
+    // students fall back to TEST_QUESTIONS.
+    this.publishQuestionsToFirebase();
+
     const quizT = localStorage.getItem(STORAGE_KEYS.quizTimer) || '60';
     const combatT = localStorage.getItem(STORAGE_KEYS.combatTimer) || '120';
     document.getElementById('t-quiz-timer').value = quizT;
     document.getElementById('t-combat-timer').value = combatT;
+  },
+
+  // Shared helper — pushes whatever's currently loaded to Firebase so every
+  // student device sees the same question bank.
+  publishQuestionsToFirebase() {
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
+    if (!Array.isArray(this.questions) || this.questions.length === 0) return;
+    Firebase.setQuestions(this.questions, this.questionsLabel)
+      .then(ok => console.log(ok
+        ? `[Teacher] ✓ Pushed ${this.questions.length} questions to Firebase (${this.questionsLabel})`
+        : '[Teacher] Failed to push questions to Firebase'))
+      .catch(e => console.warn('[Teacher] publishQuestionsToFirebase error:', e));
   },
 
   async wipeEverything() {
@@ -878,6 +895,8 @@ const Teacher = {
       localStorage.removeItem(STORAGE_KEYS.questions);
       localStorage.removeItem(STORAGE_KEYS.questionsLabel);
       this.renderBankStatus();
+      // Also push the test bank to Firebase so remote students use it too.
+      this.publishQuestionsToFirebase();
     });
 
     document.getElementById('download-sample').addEventListener('click', () => {
@@ -929,6 +948,9 @@ const Teacher = {
       localStorage.setItem(STORAGE_KEYS.questions, JSON.stringify(questions));
       localStorage.setItem(STORAGE_KEYS.questionsLabel, this.questionsLabel);
       this.renderBankStatus();
+      // CRITICAL: push to Firebase so every student device receives the new
+      // question bank. Without this, only the teacher device has the CSV.
+      this.publishQuestionsToFirebase();
     };
     reader.readAsText(file);
   },

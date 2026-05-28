@@ -38,8 +38,8 @@ const Game = {
   ended: false,
   shakeAmount: 0,
 
-  // Power-ups
-  maxPowerupsPerGame: 6,        // more drops so the rare auto-cannon actually appears
+  // Power-ups — drops keep appearing throughout the match (no hard cap), so
+  // longer combat timers still get fresh pickups every ~10-18s.
   powerupsSpawned: 0,
   nextPowerupTime: 0,
   autoCannonSpawned: false,     // guarantee at least one auto-cannon per match
@@ -664,13 +664,13 @@ const Game = {
       if (tank.alive) tank._explodedThisDeath = false;
     }
 
-    if (this.powerupsSpawned < this.maxPowerupsPerGame) {
-      this.nextPowerupTime -= dt;
-      if (this.nextPowerupTime <= 0) {
-        this.spawnPowerup();
-        this.powerupsSpawned++;
-        this.nextPowerupTime = Utils.randFloat(10, 18); // tighter cadence
-      }
+    // Drops keep coming as long as the match is going — no cap. Cadence is
+    // 10-18s between spawns. The 2nd drop is always the auto-cannon.
+    this.nextPowerupTime -= dt;
+    if (this.nextPowerupTime <= 0) {
+      this.spawnPowerup();
+      this.powerupsSpawned++;
+      this.nextPowerupTime = Utils.randFloat(10, 18);
     }
 
     for (let i = this.powerups.length - 1; i >= 0; i--) {
@@ -995,32 +995,35 @@ const Game = {
   spawnPowerup() {
     let type;
 
-    // GUARANTEE the auto-cannon appears every match.
-    // The 2nd spawn is always auto-cannon (early enough to actually use it).
-    // If it somehow gets skipped (e.g., autoCannonSpawned already true from a
-    // stale flag), force it on the very last drop as a safety net.
-    const remaining = this.maxPowerupsPerGame - this.powerupsSpawned;
-    const forceNow = this.powerupsSpawned === 1; // 2nd drop (0-indexed)
-    const lastChance = remaining === 1 && !this.autoCannonSpawned;
+    // The 2nd spawn (powerupsSpawned === 1) is always the auto-cannon so it's
+    // guaranteed to appear early in every match. After that, the auto-cannon
+    // becomes a rare random drop in the regular pool.
+    const forceAutoCannon = this.powerupsSpawned === 1;
 
-    if (forceNow || lastChance) {
+    if (forceAutoCannon) {
       type = 'autoCannon';
       this.autoCannonSpawned = true;
     } else {
-      // Other slots: weighted random across the regular drops (no auto-cannon
-      // in the pool — it's already guaranteed above).
-      const pool = ['extraBullet', 'extraBullet', 'shield', 'shield', 'freeze'];
+      // Weighted random pool. Auto-cannon has a small chance of re-appearing
+      // on later drops in long matches.
+      const pool = [
+        'extraBullet', 'extraBullet', 'extraBullet',
+        'shield', 'shield',
+        'freeze', 'freeze',
+        'autoCannon'                       // ~12.5% — occasional treat
+      ];
       type = pool[Math.floor(Math.random() * pool.length)];
+      if (type === 'autoCannon') this.autoCannonSpawned = true;
     }
 
     const pos = this.gameMap.randomSpawn(20, 80);
     this.powerups.push(new PowerUp(pos.x, pos.y, type));
 
     if (type === 'autoCannon') {
-      console.log(`%c[Game] ⚡⚡ AUTO-CANNON SPAWNED at (${Math.round(pos.x)}, ${Math.round(pos.y)}) — drop ${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame} ⚡⚡`,
+      console.log(`%c[Game] ⚡⚡ AUTO-CANNON SPAWNED at (${Math.round(pos.x)}, ${Math.round(pos.y)}) — drop #${this.powerupsSpawned + 1} ⚡⚡`,
         'color: #ff5722; font-weight: bold; font-size: 14px;');
     } else {
-      console.log(`[Game] Spawned power-up: ${type} (${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame})`);
+      console.log(`[Game] Spawned power-up: ${type} (drop #${this.powerupsSpawned + 1})`);
     }
   },
 
