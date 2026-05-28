@@ -1,13 +1,20 @@
 // ===== Student Lobby =====
 // State: name-entry -> waiting -> paired -> (quiz starts via game.js)
 
+// Bumped on every release; logged + shown as a tiny badge so we can tell at a
+// glance whether a device is running stale cached JS.
+const LOBBY_VERSION = 'v13';
+
 const StudentLobby = {
   myStudentId: null,
   myName: null,
   state: 'name',     // 'name' | 'waiting' | 'paired' | 'in_match'
   pollHandle: null,
   firebaseListenerActive: false,
+  leaderboardListenerActive: false,
+  _lastLeaderboard: null,    // cached latest snapshot — used to repaint after returnToLobby
   launchedMatchId: null,  // tracks which match we've already launched (prevents re-launching)
+  _originalLobbyHTML: null, // cached so we can restore it after a match overwrites the overlay
 
   init() {
     // On EVERY page load (including refresh) start fresh at the name entry screen.
@@ -22,6 +29,12 @@ const StudentLobby = {
     this.myStudentId = null;
     this.myName = null;
 
+    // Cache the lobby overlay HTML so we can rebuild it after a match end
+    // overwrites the .overlay-content (game.js endMatch replaces innerHTML).
+    const overlay = document.getElementById('lobby-overlay');
+    const content = overlay ? overlay.querySelector('.overlay-content') : null;
+    if (content) this._originalLobbyHTML = content.innerHTML;
+
     this.enterNameEntry();
 
     // Pre-fill the input with last name typed in this tab (convenience only — they
@@ -31,6 +44,21 @@ const StudentLobby = {
 
     this.wire();
     this.startPolling();
+
+    // Visible version badge — pinned in the corner of the page so you can verify
+    // each device is running the latest JS. If you see an old version here after
+    // refreshing, the device is serving a cached HTML.
+    console.log(`%c[Lobby] Build ${LOBBY_VERSION}`, 'color:#4caf50;font-weight:bold');
+    if (!document.getElementById('build-badge')) {
+      const badge = document.createElement('div');
+      badge.id = 'build-badge';
+      badge.textContent = LOBBY_VERSION;
+      badge.style.cssText = 'position:fixed;bottom:6px;right:8px;z-index:9999;'
+        + 'font:11px/1 -apple-system,sans-serif;color:#4caf50;'
+        + 'background:rgba(0,0,0,0.5);padding:3px 6px;border-radius:4px;'
+        + 'pointer-events:none;letter-spacing:1px;';
+      document.body.appendChild(badge);
+    }
   },
 
   wire() {
@@ -166,19 +194,69 @@ const StudentLobby = {
   },
 
   tryAttachFirebaseListener() {
-    if (this.firebaseListenerActive) return;
     if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
 
-    console.log('[Lobby] ✓ Attaching Firebase listener for pairings');
-    Firebase.listenToPairings((pairingsObj) => {
-      this.handlePairingsUpdate(pairingsObj);
-    });
-    this.firebaseListenerActive = true;
+    if (!this.firebaseListenerActive) {
+      console.log('[Lobby] ✓ Attaching Firebase listener for pairings');
+      Firebase.listenToPairings((pairingsObj) => {
+        this.handlePairingsUpdate(pairingsObj);
+      });
+      this.firebaseListenerActive = true;
 
-    // Also (re)add this player to Firebase, in case they joined before Firebase came online
-    if (this.myStudentId && this.myName) {
-      Firebase.addPlayer(this.myStudentId, this.myName).catch(e => console.warn('Firebase addPlayer (late) failed:', e));
+      // Also (re)add this player to Firebase, in case they joined before Firebase came online
+      if (this.myStudentId && this.myName) {
+        Firebase.addPlayer(this.myStudentId, this.myName).catch(e => console.warn('Firebase addPlayer (late) failed:', e));
+      }
     }
+
+    if (!this.leaderboardListenerActive) {
+      console.log('[Lobby] ✓ Attaching Firebase listener for leaderboard');
+      Firebase.listenToLeaderboard((leaderboard) => {
+        this._lastLeaderboard = leaderboard; // cache so returnToLobby can repaint
+        this.renderLeaderboard(leaderboard);
+      });
+      this.leaderboardListenerActive = true;
+    }
+  },
+
+  // Renders the live leaderboard shown on the waiting screen.
+  // `leaderboard` is the array provided by Firebase.listenToLeaderboard.
+  renderLeaderboard(leaderboard) {
+    const wrap = document.getElementById('lobby-leaderboard');
+    if (!wrap) return; // panel not in DOM (e.g. legacy lobby HTML)
+
+    const validName = (n) => typeof n === 'string' && n.trim().length > 0 &&
+                              n !== 'undefined' && n !== 'null';
+    const rows = (leaderboard || [])
+      .filter(p => p && validName(p.name))
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+    if (rows.length === 0) {
+      wrap.innerHTML = `<div class="lb-empty">No matches played yet — go win one!</div>`;
+      return;
+    }
+
+    const tbody = rows.map((p, i) => {
+      const isMe = this.myName && p.name === this.myName;
+      return `
+        <tr class="${isMe ? 'me' : ''}">
+          <td>${i + 1}</td>
+          <td class="lb-name">${p.name}${isMe ? ' <span class="me-tag">YOU</span>' : ''}</td>
+          <td>${p.wins || 0}</td>
+          <td>${p.losses || 0}</td>
+          <td>${p.kills || 0}</td>
+          <td><b>${p.rating || 0}</b></td>
+        </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <div class="lb-title">🏆 Leaderboard</div>
+      <table class="lb-table">
+        <thead>
+          <tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>Rating</th></tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>`;
   },
 
   handlePairingsUpdate(pairingsObj) {
@@ -286,9 +364,62 @@ const StudentLobby = {
     }
   },
 
-  // Called from game.js when a match ends to return the student to lobby
+  // Called from game.js when a match ends so the student STAYS logged in and
+  // returns to the lobby (rather than reloading the page, which would wipe their
+  // identity). Restores the lobby overlay HTML that endMatch overwrote, re-binds
+  // event handlers, clears match-scoped state, and re-enters the waiting state.
   returnToLobby() {
+    // Stop the game loop and clear canvas
+    if (typeof Game !== 'undefined') {
+      Game.state = 'lobby';
+      Game.ended = false;
+      // Detach firebase match listeners (we'll re-attach when a new match starts)
+      if (typeof Firebase !== 'undefined' && Firebase.isInitialized) {
+        try {
+          if (Game.matchId) Firebase.unlisten(`match:${Game.matchId}`);
+        } catch (e) {}
+      }
+    }
+
+    // Clear per-match body class set by launchGame()
+    document.body.classList.remove('playing-as-p1', 'playing-as-p2');
+
+    // Clear per-match storage so a new round starts fresh.
+    sessionStorage.removeItem('combat:currentMatchId');
+    sessionStorage.removeItem('combat:p1Name');
+    sessionStorage.removeItem('combat:p2Name');
+    sessionStorage.removeItem('combat:p1Id');
+    sessionStorage.removeItem('combat:p2Id');
+    sessionStorage.removeItem('combat:myPlayerNum');
+    sessionStorage.removeItem('combat:opponentName');
+    sessionStorage.removeItem('combat:opponentId');
+    sessionStorage.removeItem('combat:isHost');
+    localStorage.removeItem('combat:currentMatchId');
+
+    // Reset launch guard so we can be paired into a new match
+    this.launchedMatchId = null;
+
+    // Restore the original lobby overlay HTML (endMatch replaced it with results).
+    const overlay = document.getElementById('lobby-overlay');
+    const content = overlay ? overlay.querySelector('.overlay-content') : null;
+    if (content && this._originalLobbyHTML) {
+      content.innerHTML = this._originalLobbyHTML;
+      // Re-bind the (new) name/join/leave elements
+      this.wire();
+    }
+
+    // Make sure the overlay itself is visible (combat hid it)
+    if (overlay) overlay.classList.remove('hidden');
+
+    // Re-enter the waiting state — identity is preserved in this.myStudentId / myName
     this.enterWaiting();
+
+    // Repaint the leaderboard immediately using the cached snapshot. The Firebase
+    // listener may have already fired during the match (while the DOM didn't yet
+    // exist), so without this we'd see an empty leaderboard until the next push.
+    if (this._lastLeaderboard) {
+      this.renderLeaderboard(this._lastLeaderboard);
+    }
   }
 };
 

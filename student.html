@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- Disable HTML caching so script ?v= bumps actually take effect on every reload -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Combat — Student</title>
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/student.css" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
+  <link rel="stylesheet" href="css/student.css?v=13" />
 </head>
 <body>
   <div id="game-container">
@@ -78,7 +82,7 @@
       </div>
       <div class="legend-item legend-item-special">
         <span class="legend-icon" style="color:#ff5722;">⚡</span>
-        <span class="legend-text"><b>AUTO-CANNON</b> · 20s rapid fire</span>
+        <span class="legend-text"><b>AUTO-CANNON</b> · 8s rapid fire</span>
       </div>
     </div>
 
@@ -117,6 +121,10 @@
           <p class="welcome">Welcome, <b id="lobby-my-name">…</b>!</p>
           <p class="lobby-status" id="lobby-status">Waiting for teacher to pair you…</p>
           <div class="lobby-info" id="lobby-info"></div>
+
+          <!-- Live leaderboard, populated by lobby-student.js -->
+          <div id="lobby-leaderboard" class="lobby-leaderboard"></div>
+
           <button id="lobby-leave-btn" class="ghost-btn">Leave lobby</button>
         </div>
 
@@ -190,22 +198,22 @@
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
   <!-- Firebase config & manager (v=6 cache-bust) -->
-  <script src="js/firebase-config.js?v=10"></script>
-  <script src="js/firebase.js?v=10"></script>
+  <script src="js/firebase-config.js?v=13"></script>
+  <script src="js/firebase.js?v=13"></script>
 
   <!-- Game scripts -->
-  <script src="js/utils.js?v=10"></script>
-  <script src="js/questions.js?v=10"></script>
-  <script src="js/quiz.js?v=10"></script>
-  <script src="js/map.js?v=10"></script>
-  <script src="js/bullet.js?v=10"></script>
-  <script src="js/powerup.js?v=10"></script>
-  <script src="js/tank.js?v=10"></script>
-  <script src="js/input.js?v=10"></script>
-  <script src="js/touch.js?v=10"></script>
-  <script src="js/renderer.js?v=10"></script>
-  <script src="js/game.js?v=10"></script>
-  <script src="js/lobby-student.js?v=10"></script>
-  <script src="js/main.js?v=10"></script>
+  <script src="js/utils.js?v=13"></script>
+  <script src="js/questions.js?v=13"></script>
+  <script src="js/quiz.js?v=13"></script>
+  <script src="js/map.js?v=13"></script>
+  <script src="js/bullet.js?v=13"></script>
+  <script src="js/powerup.js?v=13"></script>
+  <script src="js/tank.js?v=13"></script>
+  <script src="js/input.js?v=13"></script>
+  <script src="js/touch.js?v=13"></script>
+  <script src="js/renderer.js?v=13"></script>
+  <script src="js/game.js?v=13"></script>
+  <script src="js/lobby-student.js?v=13"></script>
+  <script src="js/main.js?v=13"></script>
 </body>
 </html>

@@ -898,11 +898,12 @@ const Game = {
           Math.round(e.x) === p.x &&
           Math.round(e.y) === p.y
         );
-        if (match) {
-          next.push(match);
-        } else {
-          next.push(new PowerUp(p.x, p.y, p.type));
-        }
+        let inst = match || new PowerUp(p.x, p.y, p.type);
+        // Sync host's expiration timing so the fade/blink looks the same on both
+        // devices and the client never shows a powerup the host has already expired.
+        if (typeof p.age === 'number') inst.age = p.age;
+        if (typeof p.lifetime === 'number') inst.lifetime = p.lifetime;
+        next.push(inst);
       }
       this.powerups = next;
     }
@@ -930,7 +931,8 @@ const Game = {
         vx: Math.round(b.vx || 0), vy: Math.round(b.vy || 0)
       })),
       powerups: this.powerups.map(p => ({
-        x: Math.round(p.x), y: Math.round(p.y), type: p.type
+        x: Math.round(p.x), y: Math.round(p.y), type: p.type,
+        age: p.age, lifetime: p.lifetime
       })),
       ts: Date.now()
     };
@@ -1114,14 +1116,19 @@ const Game = {
             ${this.quizzes[1] ? `<p>Best streak: <b>${this.quizzes[1].bestStreak}</b></p>` : ''}
           </div>
         </div>
-        <button id="post-match-btn" class="primary-btn">CLOSE MATCH</button>
-        <a href="teacher.html" class="ghost-btn">← Teacher Dashboard</a>
+        <button id="post-match-btn" class="primary-btn">↩ BACK TO LOBBY</button>
         <a href="index.html" class="ghost-btn">← Home</a>
       `;
       overlay.classList.remove('hidden');
       document.getElementById('post-match-btn').addEventListener('click', () => {
-        window.close();
-        setTimeout(() => location.reload(), 50);  // fallback if window.close fails
+        // Student page: return to lobby (keep the student logged in) instead of
+        // reloading, which would wipe their session identity.
+        if (typeof StudentLobby !== 'undefined' && StudentLobby.returnToLobby) {
+          StudentLobby.returnToLobby();
+        } else {
+          // Single-device / non-lobby fallback (teacher page testing) — reload.
+          location.reload();
+        }
       });
     }
   },
@@ -1170,13 +1177,21 @@ const Game = {
                               n !== 'undefined' && n !== 'null';
     if (Firebase && Firebase.isInitialized() && this.networkRole !== 'client' &&
         validName(t1.name) && validName(t2.name)) {
+      // Pull the player IDs that the lobby stored when the match was launched.
+      // Without them, Firebase.endMatch would write to a *different* node than
+      // addPlayer() did, and the leaderboard would never reflect kills/wins.
+      const p1Id = sessionStorage.getItem('combat:p1Id') ||
+                   localStorage.getItem('combat:p1Id') || t1.name;
+      const p2Id = sessionStorage.getItem('combat:p2Id') ||
+                   localStorage.getItem('combat:p2Id') || t2.name;
+
       Firebase.endMatch(
         matchId || 'local',
-        t1.name,
-        t2.name,
+        p1Id, p2Id,
+        t1.name, t2.name,
         winnerTank ? winnerTank.name : null,
-        q1,
-        q2
+        t1.kills, t2.kills,
+        q1, q2
       ).catch(e => console.warn('Firebase endMatch failed:', e));
     } else if (!validName(t1.name) || !validName(t2.name)) {
       console.warn('[Game] Skipping Firebase endMatch — invalid tank name(s):', t1.name, t2.name);

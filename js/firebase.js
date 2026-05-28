@@ -226,13 +226,22 @@ class FirebaseManager {
 
   // ===== Match Results (Game writes, Teacher reads for leaderboard) =====
 
-  async endMatch(matchId, p1, p2, winner, p1Score, p2Score) {
+  // Record a finished match.
+  //   matchId         — used as the matches/<id> key
+  //   p1Id, p2Id      — the SAME keys used by addPlayer(). If unavailable (single-device
+  //                     mode without a lobby) callers should fall back to the player name.
+  //   p1Name, p2Name  — display names (also persisted so leaderboard can read them)
+  //   winnerName      — exact name of the winner, or null for a draw
+  //   p1Kills, p2Kills — kills delta to add to each player's running total
+  //   p1QuizScore, p2QuizScore — quiz score delta to add
+  async endMatch(matchId, p1Id, p2Id, p1Name, p2Name, winnerName, p1Kills, p2Kills, p1QuizScore, p2QuizScore) {
     if (!this.db) return false;
     try {
       const result = {
-        winner,
-        p1Score,
-        p2Score,
+        winner: winnerName || null,
+        p1Id, p2Id, p1Name, p2Name,
+        p1Kills, p2Kills,
+        p1QuizScore, p2QuizScore,
         endTime: firebase.database.ServerValue.TIMESTAMP,
         status: 'completed'
       };
@@ -240,30 +249,37 @@ class FirebaseManager {
       // Update match record
       await this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}`).update(result);
 
-      // Update player stats (read-modify-write for simplicity)
-      const p1Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p1}`);
-      const p2Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p2}`);
+      // Update player stats (read-modify-write — keyed by player ID, NOT name, so the
+      // record stays the SAME row created by addPlayer()).
+      const p1Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p1Id}`);
+      const p2Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p2Id}`);
 
       // Player 1 update
       const p1Snap = await p1Ref.once('value');
       const p1Data = p1Snap.val() || { wins: 0, losses: 0, quizScore: 0, kills: 0 };
-      p1Data.quizScore = (p1Data.quizScore || 0) + p1Score;
-      if (p1Score > p2Score) {
+      p1Data.name = p1Name;                                            // ensure name present
+      p1Data.kills = (p1Data.kills || 0) + (p1Kills || 0);
+      p1Data.quizScore = (p1Data.quizScore || 0) + (p1QuizScore || 0);
+      if (winnerName && p1Name && winnerName === p1Name) {
         p1Data.wins = (p1Data.wins || 0) + 1;
-      } else if (p1Score < p2Score) {
+      } else if (winnerName && p2Name && winnerName === p2Name) {
         p1Data.losses = (p1Data.losses || 0) + 1;
       }
+      p1Data.rating = (p1Data.wins || 0) * 100 + (p1Data.kills || 0) * 5 + (p1Data.quizScore || 0);
       await p1Ref.update(p1Data);
 
       // Player 2 update
       const p2Snap = await p2Ref.once('value');
       const p2Data = p2Snap.val() || { wins: 0, losses: 0, quizScore: 0, kills: 0 };
-      p2Data.quizScore = (p2Data.quizScore || 0) + p2Score;
-      if (p2Score > p1Score) {
+      p2Data.name = p2Name;
+      p2Data.kills = (p2Data.kills || 0) + (p2Kills || 0);
+      p2Data.quizScore = (p2Data.quizScore || 0) + (p2QuizScore || 0);
+      if (winnerName && p2Name && winnerName === p2Name) {
         p2Data.wins = (p2Data.wins || 0) + 1;
-      } else if (p2Score < p1Score) {
+      } else if (winnerName && p1Name && winnerName === p1Name) {
         p2Data.losses = (p2Data.losses || 0) + 1;
       }
+      p2Data.rating = (p2Data.wins || 0) * 100 + (p2Data.kills || 0) * 5 + (p2Data.quizScore || 0);
       await p2Ref.update(p2Data);
 
       return true;

@@ -90,6 +90,84 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* === Lobby leaderboard panel === */
+.lobby-leaderboard {
+  margin: 22px 0 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.lobby-leaderboard .lb-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffd54f;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.lobby-leaderboard .lb-empty {
+  font-size: 13px;
+  color: #8a9aa8;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.lobby-leaderboard .lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #c0cfdf;
+}
+
+.lobby-leaderboard .lb-table th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8a9aa8;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lobby-leaderboard .lb-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.lobby-leaderboard .lb-table tr:last-child td {
+  border-bottom: none;
+}
+
+.lobby-leaderboard .lb-table .lb-name {
+  font-weight: 700;
+  color: #fff;
+}
+
+.lobby-leaderboard .lb-table tr.me {
+  background: rgba(255, 213, 79, 0.08);
+}
+
+.lobby-leaderboard .lb-table tr.me .lb-name {
+  color: #ffd54f;
+}
+
+.lobby-leaderboard .me-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  background: #ffd54f;
+  color: #0a0e14;
+  padding: 1px 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 /* === Paired state === */
 .vs-label {
   font-size: 14px;

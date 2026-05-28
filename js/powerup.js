@@ -37,11 +37,19 @@ class PowerUp {
     this.bobPhase = Math.random() * Math.PI * 2;
     this.spinAngle = 0;
     this.alive = true;
+    // Lifetime — drops self-destruct after 10s so the map doesn't accumulate
+    // uncollected pickups.
+    this.lifetime = 10.0;
+    this.age = 0;
   }
 
   update(dt) {
     this.bobPhase += dt * 2;
     this.spinAngle += dt * 1.5;
+    this.age += dt;
+    if (this.age >= this.lifetime) {
+      this.alive = false;
+    }
   }
 
   applyTo(tank, allTanks) {
@@ -54,7 +62,7 @@ class PowerUp {
         if (t !== tank && t.alive) t.freeze(5.0);
       }
     } else if (this.type === 'autoCannon') {
-      tank.activateAutoCannon(20.0);  // 20 second auto-cannon
+      tank.activateAutoCannon(8.0);  // 8 second auto-cannon
     }
     this.alive = false;
   }
@@ -65,7 +73,17 @@ class PowerUp {
     const bob = Math.sin(this.bobPhase) * 4;
     const y = this.y + bob;
 
+    // Fade out + blink during the last 2 seconds of life so players know it's
+    // about to vanish.
+    const remaining = this.lifetime - this.age;
+    let alpha = 1;
+    if (remaining < 2) {
+      const blink = (Math.sin(this.age * 18) + 1) / 2; // 0..1
+      alpha = Math.max(0.25, remaining / 2) * (0.5 + 0.5 * blink);
+    }
+
     ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.translate(this.x, y);
 
     // Outer glow
