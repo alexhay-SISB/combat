@@ -714,8 +714,11 @@ const Game = {
       touchTarget: this.input.p1.touchTarget || null,
     };
 
-    // Edge-detect fire: increment counter on each new press
-    if (this.input.consumeFire(1) || this.input.consumeFire(2)) {
+    // Edge-detect fire: increment counter on each new press.
+    // Consume BOTH flags (not via short-circuit OR) since both are set on space/enter.
+    const f1 = this.input.consumeFire(1);
+    const f2 = this.input.consumeFire(2);
+    if (f1 || f2) {
       this._fireCounter = (this._fireCounter || 0) + 1;
     }
     localInput.fireCounter = this._fireCounter || 0;
