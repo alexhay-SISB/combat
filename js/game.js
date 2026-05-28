@@ -528,6 +528,33 @@ const Game = {
     // ===== CLIENT MODE: don't simulate; just send input to Firebase =====
     if (this.networkRole === 'client') {
       this.sendInputToHost();
+
+      // ===== SMOOTHING: Interpolate tank positions toward network targets =====
+      // Without this, tanks snap to position every ~50ms (jittery).
+      // Lerp factor: closes ~25% of gap per frame at 60fps = catches up quickly but smoothly.
+      const lerpFactor = Math.min(1, dt * 16);
+      for (const tank of this.tanks) {
+        if (tank.netTargetX !== undefined) {
+          tank.x += (tank.netTargetX - tank.x) * lerpFactor;
+          tank.y += (tank.netTargetY - tank.y) * lerpFactor;
+          // Angle interpolation handling wrap-around
+          if (tank.netTargetAngle !== undefined) {
+            const dAng = Utils.angleDiff(tank.angle, tank.netTargetAngle);
+            tank.angle += dAng * lerpFactor;
+          }
+        }
+      }
+
+      // ===== SMOOTHING: Extrapolate bullets using their velocity =====
+      // Bullets get recreated on each broadcast but move at known velocity between updates.
+      // Moving them locally each frame eliminates the "teleporting" effect.
+      for (const b of this.bullets) {
+        if (b.vx !== undefined && b.vy !== undefined) {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+        }
+      }
+
       // Particles + powerup animations still update so visuals look smooth
       this.particles.update(dt);
       // Animate powerups locally (bob + spin) even though spawning/pickup is host-side
@@ -661,10 +688,10 @@ const Game = {
 
     this.updateHUD();
 
-    // Broadcast live state (throttled to ~12fps for spectator)
+    // Broadcast live state (~30 FPS — smoother movement for client, still light on Firebase)
     // ALWAYS run — broadcastState writes localStorage even when BroadcastChannel is null
     const now = performance.now();
-    if (now - lastBroadcast > 80) {
+    if (now - lastBroadcast > 33) {
       lastBroadcast = now;
       this.broadcastState();
     }
@@ -674,7 +701,7 @@ const Game = {
   sendInputToHost() {
     if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
     const now = performance.now();
-    if (now - this.lastInputSent < 50) return; // throttle ~20Hz
+    if (now - this.lastInputSent < 33) return; // throttle ~30Hz for snappier remote control
     this.lastInputSent = now;
 
     // Pull local input — in client mode, "p1" (WASD) or touch controls the local tank
@@ -713,14 +740,34 @@ const Game = {
     }
 
     // Apply tank positions, angles, kills, points, alive status
+    // SMOOTHING: store target position instead of snapping — client update loop lerps to it.
     if (state.tanks && Array.isArray(state.tanks)) {
       for (let i = 0; i < state.tanks.length && i < this.tanks.length; i++) {
         const t = state.tanks[i];
         const local = this.tanks[i];
         if (!t || !local) continue;
-        local.x = t.x;
-        local.y = t.y;
-        local.angle = t.angle;
+
+        // Store network target — actual x/y are lerped toward this each frame
+        local.netTargetX = t.x;
+        local.netTargetY = t.y;
+        local.netTargetAngle = t.angle;
+
+        // First state received? Snap to it so we don't slide in from origin.
+        if (local._netInit === undefined) {
+          local.x = t.x;
+          local.y = t.y;
+          local.angle = t.angle;
+          local._netInit = true;
+        }
+
+        // If tank was just teleported (respawn) by host, snap to new pos to avoid long lerp.
+        const dx = t.x - local.x, dy = t.y - local.y;
+        if (Math.hypot(dx, dy) > 150) {
+          local.x = t.x;
+          local.y = t.y;
+          local.angle = t.angle;
+        }
+
         local.kills = t.kills;
         local.points = t.points;
         local.alive = t.alive;
@@ -731,16 +778,49 @@ const Game = {
       }
     }
 
-    // Apply bullets — recreate lightweight versions for rendering
+    // Apply bullets — recreate lightweight versions WITH velocity for client-side extrapolation
     if (state.bullets && Array.isArray(state.bullets)) {
-      // Lazy-create or update render-only bullets
+      // Try to match incoming bullets to existing ones (by proximity + type + velocity direction)
+      // so we can preserve them across broadcasts and smoothly extrapolate. Falls back to fresh
+      // bullet for new spawns.
+      const oldBullets = this.bullets || [];
+      const used = new Set();
+
       this.bullets = state.bullets.map(b => {
         const ammo = (typeof AMMO_TYPES !== 'undefined') ? AMMO_TYPES[b.type] : null;
+        const vx = b.vx || 0;
+        const vy = b.vy || 0;
+
+        // Find nearest old bullet of same type that hasn't been claimed yet
+        let bestMatch = null;
+        let bestDist = 80; // max snap distance
+        for (let j = 0; j < oldBullets.length; j++) {
+          if (used.has(j)) continue;
+          const o = oldBullets[j];
+          if (o.type !== b.type) continue;
+          const d = Math.hypot(o.x - b.x, o.y - b.y);
+          if (d < bestDist) {
+            bestDist = d;
+            bestMatch = j;
+          }
+        }
+
+        if (bestMatch !== null) {
+          used.add(bestMatch);
+          const existing = oldBullets[bestMatch];
+          // Smoothly correct existing bullet toward authoritative position
+          existing.x = b.x;
+          existing.y = b.y;
+          existing.vx = vx;
+          existing.vy = vy;
+          return existing;
+        }
+
+        // New bullet — create fresh
         return {
-          x: b.x, y: b.y, type: b.type,
+          x: b.x, y: b.y, vx: vx, vy: vy, type: b.type,
           def: ammo || { color: '#fff', size: 4 },
           alive: true,
-          // Stub draw method
           draw: function(ctx) {
             ctx.save();
             ctx.fillStyle = this.def.color;
@@ -797,7 +877,8 @@ const Game = {
         autoCannonActive: t.autoCannonActive, autoCannonTime: t.autoCannonTime
       })),
       bullets: this.bullets.map(b => ({
-        x: Math.round(b.x), y: Math.round(b.y), type: b.type
+        x: Math.round(b.x), y: Math.round(b.y), type: b.type,
+        vx: Math.round(b.vx || 0), vy: Math.round(b.vy || 0)
       })),
       powerups: this.powerups.map(p => ({
         x: Math.round(p.x), y: Math.round(p.y), type: p.type
