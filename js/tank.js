@@ -64,16 +64,17 @@ class Tank {
       if (this.shieldTime <= 0) this.shielded = false;
     }
 
-    // Auto-cannon power-up
+    // Auto-cannon power-up: decrement timers but DON'T reset the fire timer
+    // when it hits 0 — that's autoFire()'s job. Resetting it here was the bug
+    // that prevented any shots from going out.
     if (this.autoCannonActive) {
       this.autoCannonTime -= dt;
-      if (this.autoCannonTime <= 0) this.autoCannonActive = false;
-      else {
-        // Fire continuously while active
+      if (this.autoCannonTime <= 0) {
+        this.autoCannonActive = false;
+      } else if (this.autoCannonFireTimer > 0) {
+        // Cool down toward 0; autoFire() in game.js fires + resets when ready
         this.autoCannonFireTimer -= dt;
-        if (this.autoCannonFireTimer <= 0) {
-          this.autoCannonFireTimer = 0.08;  // ~12 shots/sec
-        }
+        if (this.autoCannonFireTimer < 0) this.autoCannonFireTimer = 0;
       }
     }
 
