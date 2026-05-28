@@ -529,6 +529,17 @@ const Game = {
 
     // ===== CLIENT MODE: don't simulate; just send input to Firebase =====
     if (this.networkRole === 'client') {
+      // Decrement own copy of the timer locally so we can end the match even
+      // if the host's final broadcast is lost. Host broadcasts overwrite this
+      // back to the authoritative value on every state update.
+      if (this.timeRemaining > 0) this.timeRemaining -= dt;
+      if (this.timeRemaining <= 0 && !this.ended) {
+        this.timeRemaining = 0;
+        console.log('%c[Client] Timer reached 0 locally — ending match (fallback)', 'color:#ff9800');
+        this.endMatch();
+        return;
+      }
+
       this.sendInputToHost();
 
       // ===== SMOOTHING: Interpolate tank positions toward network targets =====
@@ -734,6 +745,27 @@ const Game = {
   // CLIENT: apply game state received from host (renders host's authoritative state)
   applyRemoteState(state) {
     if (this.networkRole !== 'client' || !state) return;
+
+    // MATCH END SIGNAL — must be handled even if local state is already past 'combat'
+    // (e.g., a duplicate end broadcast arriving after we've already ended).
+    if (state.ended === true && !this.ended) {
+      console.log('%c[Client] ← Received MATCH END from host', 'color:#ff9800;font-weight:bold');
+      // Apply final tank kills/points from payload so the results screen is accurate
+      if (state.tanks && Array.isArray(state.tanks) && this.tanks) {
+        for (let i = 0; i < state.tanks.length && i < this.tanks.length; i++) {
+          const t = state.tanks[i];
+          const local = this.tanks[i];
+          if (t && local) {
+            local.kills = t.kills;
+            local.points = t.points;
+          }
+        }
+      }
+      this.timeRemaining = 0;
+      this.endMatch();
+      return;
+    }
+
     if (this.state !== 'combat') return; // ignore state before combat starts
 
     if (!this.tanks || this.tanks.length === 0) return;
@@ -923,6 +955,41 @@ const Game = {
     } catch (e) {}
   },
 
+  // Sent once by HOST when match ends — tells client to also end the match.
+  // Separate from broadcastState because the host's update loop stops broadcasting
+  // as soon as state changes to 'results'.
+  broadcastMatchEnd(winnerTank) {
+    const matchId = sessionStorage.getItem('combat:currentMatchId') ||
+                    localStorage.getItem('combat:currentMatchId') || 'local';
+    const payload = {
+      type: 'match-end',
+      matchId,
+      ended: true,
+      time: 0,
+      tanks: this.tanks.map(t => ({
+        x: Math.round(t.x), y: Math.round(t.y), angle: t.angle,
+        name: t.name,
+        kills: t.kills, points: t.points,
+        alive: t.alive, shielded: t.shielded, frozen: t.frozen,
+        autoCannonActive: false, autoCannonTime: 0
+      })),
+      bullets: [],
+      powerups: [],
+      winnerName: winnerTank ? winnerTank.name : null,
+      ts: Date.now()
+    };
+
+    if (broadcastChannel) {
+      try { broadcastChannel.postMessage(payload); } catch (e) {}
+    }
+    if (Firebase && Firebase.isInitialized()) {
+      Firebase.broadcastMatchState(matchId, payload).catch(e => console.warn('Firebase end-broadcast failed:', e));
+    }
+    try { localStorage.setItem('combat:spectate:' + matchId, JSON.stringify(payload)); } catch (e) {}
+
+    console.log('%c[Host] ✓ Broadcast MATCH END to client', 'color:#ff9800;font-weight:bold');
+  },
+
   spawnPowerup() {
     let type;
 
@@ -997,7 +1064,6 @@ const Game = {
   endMatch() {
     if (this.ended) return;
     this.ended = true;
-    this.state = 'results';
 
     const t1 = this.tanks[0];
     const t2 = this.tanks[1];
@@ -1012,6 +1078,15 @@ const Game = {
     } else {
       winnerText = 'DRAW!';
     }
+
+    // CRITICAL: HOST must broadcast the match-end signal BEFORE state changes,
+    // otherwise the update loop's early-exit (state !== 'combat') prevents any
+    // further broadcasts and the client never learns the match ended.
+    if (this.networkRole === 'host') {
+      this.broadcastMatchEnd(winnerTank);
+    }
+
+    this.state = 'results';
 
     // Save match result to the leaderboard (localStorage)
     this.saveMatchResult(t1, t2, winnerTank, loserTank);
