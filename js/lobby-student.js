@@ -50,6 +50,11 @@ const StudentLobby = {
     try { players = JSON.parse(localStorage.getItem('combat:players') || '[]'); }
     catch (e) { players = []; }
 
+    // Defensive: drop any entries that don't have a usable name
+    players = (Array.isArray(players) ? players : []).filter(
+      p => p && typeof p.name === 'string' && p.name.trim().length > 0
+    );
+
     // Reuse ID if name already exists (no duplicate adds)
     let existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
     if (existing) {

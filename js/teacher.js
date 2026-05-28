@@ -83,8 +83,13 @@ const Lobby = {
   },
 
   load() {
-    try { this.players = JSON.parse(localStorage.getItem(STORAGE_KEYS.players) || '[]'); }
-    catch (e) { this.players = []; }
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.players) || '[]');
+      // Defensive: drop any entries missing a usable name
+      this.players = (Array.isArray(raw) ? raw : []).filter(
+        p => p && typeof p.name === 'string' && p.name.trim().length > 0
+      );
+    } catch (e) { this.players = []; }
   },
 
   save() {
@@ -703,8 +708,17 @@ const Teacher = {
     // Listen to the players list so the teacher sees students appear in real time
     Firebase.db.ref(`tournaments/${Firebase.tournamentId}/players`).on('value', (snap) => {
       const data = snap.val() || {};
-      const players = Object.entries(data).map(([id, p]) => ({ id, name: p.name, joinedAt: Date.now() }));
-      const merged = [...Lobby.players];
+      // Filter out any entries that don't have a usable name (defensive — bad data from old wipes)
+      const players = Object.entries(data)
+        .filter(([id, p]) => p && typeof p.name === 'string' && p.name.trim().length > 0)
+        .map(([id, p]) => ({ id, name: p.name, joinedAt: Date.now() }));
+
+      // Also clean any corrupted entries in the local list before merging
+      const cleanLocal = (Lobby.players || []).filter(
+        m => m && typeof m.name === 'string' && m.name.trim().length > 0
+      );
+
+      const merged = [...cleanLocal];
       for (const p of players) {
         if (!merged.some(m => m.name.toLowerCase() === p.name.toLowerCase())) {
           merged.push(p);
