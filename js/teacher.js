@@ -745,6 +745,34 @@ const Teacher = {
     document.getElementById('t-combat-timer').value = combatT;
   },
 
+  wipeEverything() {
+    const msg = 'DELETE EVERYTHING? This will permanently clear all:\n- Players & lobby list\n- All game records & leaderboard\n- Pairings & rounds\n- Custom question bank\n- Game settings\n\nThis action cannot be undone.';
+    if (!confirm(msg)) return;
+
+    // Clear all localStorage keys starting with 'combat:'
+    const keysToDelete = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('combat:')) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach(key => localStorage.removeItem(key));
+
+    // Reset to defaults
+    this.questions = TEST_QUESTIONS;
+    this.questionsLabel = `Built-in test bank (${TEST_QUESTIONS.length} questions)`;
+    this.renderBankStatus();
+
+    // Refresh all UI
+    Lobby.render();
+    RoundManager.render();
+    Leaderboard.render();
+
+    console.log('[Teacher] 🗑 Wiped everything! All data cleared.');
+    alert('✓ All data has been cleared. The dashboard has been reset to defaults.');
+  },
+
   wireEvents() {
     const fileInput = document.getElementById('csv-file');
     fileInput.addEventListener('change', (e) => {
@@ -795,6 +823,7 @@ const Teacher = {
     });
 
     document.getElementById('reset-leaderboard').addEventListener('click', () => Leaderboard.reset());
+    document.getElementById('wipe-everything-btn').addEventListener('click', () => this.wipeEverything());
   },
 
   handleFile(file) {

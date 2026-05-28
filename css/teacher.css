@@ -50,6 +50,24 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.danger-btn {
+  background: rgba(244, 67, 54, 0.15) !important;
+  color: #ff6b6b !important;
+  border: 1px solid rgba(244, 67, 54, 0.3) !important;
+  transition: all 0.2s ease;
+}
+
+.danger-btn:hover {
+  background: rgba(244, 67, 54, 0.25) !important;
+  box-shadow: 0 0 12px rgba(244, 67, 54, 0.4) !important;
+}
+
 .open-game-btn {
   background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
   color: #0a0e14;
