@@ -558,13 +558,25 @@ const Game = {
         }
       }
 
-      // ===== SMOOTHING: Extrapolate bullets using their velocity =====
-      // Bullets get recreated on each broadcast but move at known velocity between updates.
-      // Moving them locally each frame eliminates the "teleporting" effect.
+      // ===== SMOOTHING: Extrapolate + lerp bullets =====
+      // Two-step smoothing:
+      //   1) Extrapolate via velocity each frame so motion is fluid between broadcasts.
+      //   2) Also lerp gently toward the latest authoritative position so any
+      //      network drift gets absorbed smoothly instead of snapping every 33ms
+      //      (which was the visible jitter on the player's own screen).
+      const bulletLerp = Math.min(1, dt * 12); // closes ~20% of gap per frame at 60fps
       for (const b of this.bullets) {
         if (b.vx !== undefined && b.vy !== undefined) {
           b.x += b.vx * dt;
           b.y += b.vy * dt;
+        }
+        if (b.netTargetX !== undefined) {
+          b.x += (b.netTargetX - b.x) * bulletLerp;
+          b.y += (b.netTargetY - b.y) * bulletLerp;
+          // Advance the target by the bullet's velocity too — otherwise the
+          // lerp drags the bullet back toward a stale snapshot position.
+          b.netTargetX += (b.vx || 0) * dt;
+          b.netTargetY += (b.vy || 0) * dt;
         }
       }
 
@@ -845,17 +857,23 @@ const Game = {
         if (bestMatch !== null) {
           used.add(bestMatch);
           const existing = oldBullets[bestMatch];
-          // Smoothly correct existing bullet toward authoritative position
-          existing.x = b.x;
-          existing.y = b.y;
+          // DON'T snap — that's what causes the visible 30Hz jitter on the
+          // client. Instead, store the authoritative position as a target the
+          // update loop will lerp toward, while local extrapolation keeps the
+          // bullet moving smoothly at host-reported velocity.
+          existing.netTargetX = b.x;
+          existing.netTargetY = b.y;
           existing.vx = vx;
           existing.vy = vy;
           return existing;
         }
 
-        // New bullet — create fresh
+        // New bullet — create fresh. Set both current and target to broadcast
+        // pos so the first frame doesn't try to lerp from (0,0).
         return {
-          x: b.x, y: b.y, vx: vx, vy: vy, type: b.type,
+          x: b.x, y: b.y,
+          netTargetX: b.x, netTargetY: b.y,
+          vx: vx, vy: vy, type: b.type,
           def: ammo || { color: '#fff', size: 4 },
           alive: true,
           draw: function(ctx) {
