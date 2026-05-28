@@ -4,7 +4,7 @@ const AMMO_TYPES = {
   bullet: {
     name: 'BULLET',
     cost: 1,
-    speed: 520,
+    speed: 580,
     radius: 5,
     maxLifetime: 10.0,      // lingers for ricochet plays
     maxBounces: 12,
@@ -18,10 +18,10 @@ const AMMO_TYPES = {
   cannon: {
     name: 'CANNON',
     cost: 2,
-    speed: 780,
+    speed: 1000,
     radius: 9,              // visually larger
-    maxLifetime: 6.0,       // travels further & lingers more
-    maxBounces: 7,
+    maxLifetime: 12.0,      // travels further & lingers more
+    maxBounces: 10,
     requiresBounce: false,
     color: '#ff5722',
     color2: '#d84315',
@@ -34,7 +34,7 @@ const AMMO_TYPES = {
     cost: 4,
     speed: 400,
     radius: 7,
-    maxLifetime: 15.0,      // hunts for up to 15s
+    maxLifetime: 18.0,      // hunts for up to 18s
     maxBounces: 99,         // unlimited bouncing while it hunts
     requiresBounce: false,
     seeks: true,

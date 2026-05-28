@@ -39,6 +39,11 @@ class Tank {
 
     this.ammoType = 'bullet';
 
+    // Auto-cannon power-up
+    this.autoCannonActive = false;
+    this.autoCannonTime = 0;
+    this.autoCannonFireTimer = 0;
+
     // For drawing
     this._explodedThisDeath = false;
   }
@@ -57,6 +62,19 @@ class Tank {
     if (this.shielded) {
       this.shieldTime -= dt;
       if (this.shieldTime <= 0) this.shielded = false;
+    }
+
+    // Auto-cannon power-up
+    if (this.autoCannonActive) {
+      this.autoCannonTime -= dt;
+      if (this.autoCannonTime <= 0) this.autoCannonActive = false;
+      else {
+        // Fire continuously while active
+        this.autoCannonFireTimer -= dt;
+        if (this.autoCannonFireTimer <= 0) {
+          this.autoCannonFireTimer = 0.08;  // ~12 shots/sec
+        }
+      }
     }
 
     if (this.fireCooldown > 0) this.fireCooldown -= dt;
@@ -140,6 +158,24 @@ class Tank {
     return b;
   }
 
+  // Auto-fire cannons (unlimited, no cost) while power-up is active
+  autoFire(bullets) {
+    if (!this.alive || this.frozen) return null;
+    if (this.autoCannonFireTimer > 0) return null;
+
+    // Bullet exits from barrel tip
+    const barrelEnd = this.bodyW / 2 + 22;
+    const bx = this.x + Math.cos(this.angle) * barrelEnd;
+    const by = this.y + Math.sin(this.angle) * barrelEnd;
+    const b = new Bullet(bx, by, this.angle, 'cannon', this);
+    bullets.push(b);
+
+    this.autoCannonFireTimer = 0.08;  // ~12 shots/sec
+    this.muzzleFlash = 1;
+    this.recoil = 1;
+    return b;
+  }
+
   setAmmoType(type) {
     if (AMMO_TYPES[type]) this.ammoType = type;
   }
@@ -176,6 +212,12 @@ class Tank {
   freeze(time) {
     this.frozen = true;
     this.freezeTime = Math.max(this.freezeTime, time);
+  }
+
+  activateAutoCannon(time) {
+    this.autoCannonActive = true;
+    this.autoCannonTime = Math.max(this.autoCannonTime, time);
+    this.autoCannonFireTimer = 0;
   }
 
   draw(ctx) {
@@ -244,6 +286,29 @@ class Tank {
         ctx.lineTo(Math.cos(a) * 14, Math.sin(a) * 14);
         ctx.stroke();
       }
+    }
+
+    // Auto-cannon activation ring
+    if (this.autoCannonActive) {
+      const t = performance.now() * 0.008;
+      const pulse = 0.5 + Math.sin(t * 3) * 0.4;
+      ctx.strokeStyle = '#ff5722';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      // Rotating flame-like dash pattern
+      ctx.strokeStyle = '#ffb300';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 4]);
+      ctx.lineDashOffset = -t * 40;
+      ctx.globalAlpha = pulse * 0.7;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();

@@ -586,6 +586,17 @@ const Game = {
       }
     }
 
+    // Auto-cannon power-up: fire continuously if active
+    for (const tank of this.tanks) {
+      if (tank.autoCannonActive) {
+        const b = tank.autoFire(this.bullets);
+        if (b) {
+          this.particles.spark(b.x, b.y, AMMO_TYPES[b.type].color);
+          this.shakeAmount = Math.max(this.shakeAmount, 1);
+        }
+      }
+    }
+
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
       const wasAlive = b.alive;
@@ -705,6 +716,8 @@ const Game = {
         local.alive = t.alive;
         local.shielded = t.shielded;
         local.frozen = t.frozen;
+        local.autoCannonActive = t.autoCannonActive;
+        local.autoCannonTime = t.autoCannonTime;
       }
     }
 
@@ -770,7 +783,8 @@ const Game = {
         x: Math.round(t.x), y: Math.round(t.y), angle: t.angle,
         name: t.name,
         kills: t.kills, points: t.points,
-        alive: t.alive, shielded: t.shielded, frozen: t.frozen
+        alive: t.alive, shielded: t.shielded, frozen: t.frozen,
+        autoCannonActive: t.autoCannonActive, autoCannonTime: t.autoCannonTime
       })),
       bullets: this.bullets.map(b => ({
         x: Math.round(b.x), y: Math.round(b.y), type: b.type
@@ -802,7 +816,7 @@ const Game = {
   },
 
   spawnPowerup() {
-    const types = ['extraBullet', 'shield', 'freeze'];
+    const types = ['extraBullet', 'shield', 'freeze', 'autoCannon'];
     const type = types[Math.floor(Math.random() * types.length)];
     const pos = this.gameMap.randomSpawn(20, 80);
     this.powerups.push(new PowerUp(pos.x, pos.y, type));

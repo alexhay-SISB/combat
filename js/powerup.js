@@ -18,6 +18,12 @@ const POWERUP_TYPES = {
     color: '#80deea',
     glow: 'rgba(128, 222, 234, 0.6)',
     icon: '❄',
+  },
+  autoCannon: {
+    name: 'AUTO CANNON',
+    color: '#ff5722',
+    glow: 'rgba(255, 87, 34, 0.8)',
+    icon: '⚡',
   }
 };
 
@@ -47,6 +53,8 @@ class PowerUp {
       for (const t of allTanks) {
         if (t !== tank && t.alive) t.freeze(5.0);
       }
+    } else if (this.type === 'autoCannon') {
+      tank.activateAutoCannon(20.0);  // 20 second auto-cannon
     }
     this.alive = false;
   }
