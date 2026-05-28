@@ -39,9 +39,10 @@ const Game = {
   shakeAmount: 0,
 
   // Power-ups
-  maxPowerupsPerGame: 3,
+  maxPowerupsPerGame: 6,        // more drops so the rare auto-cannon actually appears
   powerupsSpawned: 0,
   nextPowerupTime: 0,
+  autoCannonSpawned: false,     // guarantee at least one auto-cannon per match
 
   // ===== Network state =====
   // 'local' = single device (both players keyboard); 'host' = P1 device; 'client' = P2 device
@@ -510,7 +511,8 @@ const Game = {
     this.bullets = [];
     this.powerups = [];
     this.powerupsSpawned = 0;
-    this.nextPowerupTime = Utils.randFloat(8, 15);
+    this.autoCannonSpawned = false;
+    this.nextPowerupTime = Utils.randFloat(6, 12); // first one comes sooner
 
     this.timeRemaining = this.matchTime;
     this.ended = false;
@@ -656,7 +658,7 @@ const Game = {
       if (this.nextPowerupTime <= 0) {
         this.spawnPowerup();
         this.powerupsSpawned++;
-        this.nextPowerupTime = Utils.randFloat(15, 25);
+        this.nextPowerupTime = Utils.randFloat(10, 18); // tighter cadence
       }
     }
 
@@ -910,10 +912,24 @@ const Game = {
   },
 
   spawnPowerup() {
-    const types = ['extraBullet', 'shield', 'freeze', 'autoCannon'];
-    const type = types[Math.floor(Math.random() * types.length)];
+    let type;
+
+    // Guarantee at least one auto-cannon per match — schedule it on the 3rd spawn
+    // (mid-game, exciting reveal). If somehow not chosen, force it on the last spawn.
+    const remaining = this.maxPowerupsPerGame - this.powerupsSpawned;
+    if (!this.autoCannonSpawned && (this.powerupsSpawned === 2 || remaining === 1)) {
+      type = 'autoCannon';
+      this.autoCannonSpawned = true;
+    } else {
+      // Weighted random: auto-cannon stays rare among "normal" picks so it feels special
+      const pool = ['extraBullet', 'extraBullet', 'shield', 'shield', 'freeze', 'autoCannon'];
+      type = pool[Math.floor(Math.random() * pool.length)];
+      if (type === 'autoCannon') this.autoCannonSpawned = true;
+    }
+
     const pos = this.gameMap.randomSpawn(20, 80);
     this.powerups.push(new PowerUp(pos.x, pos.y, type));
+    console.log(`[Game] Spawned power-up: ${type} (${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame})`);
   },
 
   updateHUD() {

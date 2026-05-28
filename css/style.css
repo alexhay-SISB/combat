@@ -270,6 +270,34 @@ html, body {
   font-weight: 700;
 }
 
+/* Special / rare power-up — auto-cannon gets a pulsing red-orange highlight */
+.legend-item-special {
+  padding: 4px 10px;
+  background: rgba(255, 87, 34, 0.15);
+  border: 1px solid rgba(255, 87, 34, 0.5);
+  border-radius: 6px;
+  animation: legend-pulse 1.8s ease-in-out infinite;
+}
+
+.legend-item-special .legend-icon {
+  animation: legend-icon-glow 1.2s ease-in-out infinite;
+}
+
+.legend-item-special .legend-text b {
+  color: #ff8a65;
+  letter-spacing: 1px;
+}
+
+@keyframes legend-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(255, 87, 34, 0.4); }
+  50%      { box-shadow: 0 0 14px rgba(255, 87, 34, 0.8); }
+}
+
+@keyframes legend-icon-glow {
+  0%, 100% { text-shadow: 0 0 8px currentColor; transform: scale(1); }
+  50%      { text-shadow: 0 0 18px currentColor, 0 0 24px currentColor; transform: scale(1.15); }
+}
+
 /* ===== Overlay ===== */
 .overlay {
   position: absolute;
