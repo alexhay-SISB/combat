@@ -219,16 +219,21 @@ const StudentLobby = {
     const opponentName = myPlayerNum === 1 ? pair.p2Name : pair.p1Name;
     const opponentId = myPlayerNum === 1 ? pair.p2Id : pair.p1Id;
 
-    // Save match info to localStorage for game.js to read
+    // PER-TAB / PER-DEVICE state → sessionStorage (NOT localStorage which is shared between tabs)
+    sessionStorage.setItem('combat:currentMatchId', pair.matchId);
+    sessionStorage.setItem('combat:p1Name', pair.p1Name);
+    sessionStorage.setItem('combat:p2Name', pair.p2Name);
+    sessionStorage.setItem('combat:p1Id', pair.p1Id);
+    sessionStorage.setItem('combat:p2Id', pair.p2Id);
+    sessionStorage.setItem('combat:myPlayerNum', String(myPlayerNum));
+    sessionStorage.setItem('combat:opponentName', opponentName);
+    sessionStorage.setItem('combat:opponentId', opponentId);
+    sessionStorage.setItem('combat:isHost', myPlayerNum === 1 ? '1' : '0');
+
+    // ALSO write to localStorage for backward-compat (single-device mode reads these)
     localStorage.setItem('combat:currentMatchId', pair.matchId);
     localStorage.setItem('combat:p1Name', pair.p1Name);
     localStorage.setItem('combat:p2Name', pair.p2Name);
-    localStorage.setItem('combat:p1Id', pair.p1Id);
-    localStorage.setItem('combat:p2Id', pair.p2Id);
-    localStorage.setItem('combat:myPlayerNum', String(myPlayerNum));
-    localStorage.setItem('combat:opponentName', opponentName);
-    localStorage.setItem('combat:opponentId', opponentId);
-    localStorage.setItem('combat:isHost', myPlayerNum === 1 ? '1' : '0');
 
     // Hide the lobby overlay
     const lobbyOverlay = document.getElementById('lobby-overlay');
@@ -241,9 +246,11 @@ const StudentLobby = {
     // Set body class so CSS can hide opponent's quiz panel
     document.body.classList.add('playing-as-p' + myPlayerNum);
 
+    console.log(`[Lobby] Launching as P${myPlayerNum} (${this.myName}) vs ${opponentName} — matchId=${pair.matchId}`);
+
     // Trigger game start
     if (typeof Game !== 'undefined' && Game.startQuiz) {
-      // Re-detect network role NOW that localStorage has match info
+      // Re-detect network role NOW that sessionStorage has match info
       if (Game.detectNetworkRole) Game.detectNetworkRole();
       Game.startQuiz(quizSecs, combatSecs);
     } else {

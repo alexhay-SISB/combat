@@ -67,22 +67,30 @@ const Game = {
     window.addEventListener('resize', () => this.resize());
   },
 
-  // Detect host/client/local role from localStorage (set by StudentLobby)
+  // Detect host/client/local role from sessionStorage (per-tab) — set by StudentLobby
   detectNetworkRole() {
-    const myPlayerNum = parseInt(localStorage.getItem('combat:myPlayerNum') || '0');
-    const matchId = localStorage.getItem('combat:currentMatchId');
+    // sessionStorage is per-tab/per-device → safe for multi-tab testing
+    const myPlayerNum = parseInt(sessionStorage.getItem('combat:myPlayerNum') || '0');
+    const matchId = sessionStorage.getItem('combat:currentMatchId');
     const firebaseReady = (typeof Firebase !== 'undefined' && Firebase.isInitialized());
+
+    // Clean up any prior listeners from a previous match
+    if (typeof Firebase !== 'undefined' && Firebase.isInitialized() && this.matchId && this.matchId !== matchId) {
+      Firebase.unlisten(`input:${this.matchId}:p2`);
+      Firebase.unlisten(`match:${this.matchId}`);
+      Firebase.unlisten(`quizScores:${this.matchId}`);
+    }
 
     if (myPlayerNum && matchId && firebaseReady) {
       this.myPlayerNum = myPlayerNum;
       this.matchId = matchId;
       this.networkRole = (myPlayerNum === 1) ? 'host' : 'client';
-      console.log(`Network role: ${this.networkRole} (player ${myPlayerNum}), match: ${matchId}`);
+      console.log(`[Game] Network role: ${this.networkRole} (player ${myPlayerNum}), match: ${matchId}`);
 
       // Host listens for client's input
       if (this.networkRole === 'host') {
         Firebase.listenToInput(matchId, 2, (input) => {
-          this.remoteInput = input;
+          this.remoteInput = input || this.remoteInput;
         });
       }
 
@@ -100,7 +108,8 @@ const Game = {
     } else {
       this.networkRole = 'local';
       this.myPlayerNum = 0;
-      console.log('Network role: local (single-device mode)');
+      this.matchId = null;
+      console.log('[Game] Network role: local (single-device mode)');
     }
   },
 
@@ -468,9 +477,10 @@ const Game = {
     const p1x = 170;
     const p2x = this.mapWidth - 170;
 
-    // Use teacher-configured names if set
-    const p1Name = (localStorage.getItem('combat:p1Name') || 'RED').toUpperCase().slice(0, 14);
-    const p2Name = (localStorage.getItem('combat:p2Name') || 'BLUE').toUpperCase().slice(0, 14);
+    // Use teacher-configured names if set (sessionStorage = per-tab, falls back to localStorage)
+    const getMatchVar = (key) => sessionStorage.getItem(key) || localStorage.getItem(key);
+    const p1Name = (getMatchVar('combat:p1Name') || 'RED').toUpperCase().slice(0, 14);
+    const p2Name = (getMatchVar('combat:p2Name') || 'BLUE').toUpperCase().slice(0, 14);
 
     this.tanks = [
       new Tank(p1x, bracketCenterY, '#ff5252', '#b71c1c', '#ffeb3b', p1Name),
@@ -720,7 +730,8 @@ const Game = {
     // Client doesn't broadcast — it receives state from host
     if (this.networkRole === 'client') return;
 
-    const matchId = localStorage.getItem('combat:currentMatchId') || 'local';
+    const matchId = sessionStorage.getItem('combat:currentMatchId') ||
+                    localStorage.getItem('combat:currentMatchId') || 'local';
     const payload = {
       type: 'state-update',
       matchId,
@@ -883,11 +894,14 @@ const Game = {
 
     localStorage.setItem('combat:leaderboard', JSON.stringify(lb));
 
-    // Also write to Firebase
-    if (Firebase && Firebase.isInitialized()) {
-      const matchId = localStorage.getItem('combat:currentMatchId') || 'local';
+    // Per-tab matchId (falls back to localStorage for single-device mode)
+    const matchId = sessionStorage.getItem('combat:currentMatchId') ||
+                    localStorage.getItem('combat:currentMatchId');
+
+    // Also write to Firebase — but ONLY host (or local) writes results to avoid duplicates
+    if (Firebase && Firebase.isInitialized() && this.networkRole !== 'client') {
       Firebase.endMatch(
-        matchId,
+        matchId || 'local',
         t1.name,
         t2.name,
         winnerTank ? winnerTank.name : null,
@@ -897,7 +911,6 @@ const Game = {
     }
 
     // Update the pairing in the round (if this match was part of a tournament round)
-    const matchId = localStorage.getItem('combat:currentMatchId');
     if (matchId) {
       try {
         const pairings = JSON.parse(localStorage.getItem('combat:pairings') || '[]');
@@ -938,7 +951,8 @@ const Game = {
       try { localStorage.removeItem('combat:spectate:' + matchId); } catch (e) {}
     }
 
-    // Clear current match ID
+    // Clear current match ID from BOTH storages (per-tab and shared)
+    sessionStorage.removeItem('combat:currentMatchId');
     localStorage.removeItem('combat:currentMatchId');
   }
 };
