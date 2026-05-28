@@ -845,10 +845,22 @@ const Game = {
 
     // Apply powerups (render-only on client) — preserve existing instances by
     // (type + rounded x/y) so animation state (bob/spin) doesn't reset each broadcast.
-    if (state.powerups && Array.isArray(state.powerups) && typeof PowerUp !== 'undefined') {
+    //
+    // CRITICAL: Firebase RTDB stores empty arrays as null, so we treat null/undefined
+    // state.powerups as "host has no powerups" (clear local list). It can also come
+    // back as an object with numeric keys — normalize to an array.
+    if (typeof PowerUp !== 'undefined') {
+      let incoming = state.powerups;
+      if (incoming == null) {
+        incoming = [];                                    // null/undefined → empty
+      } else if (!Array.isArray(incoming)) {
+        incoming = Object.values(incoming);               // Firebase object → array
+      }
+
       const existing = this.powerups || [];
       const next = [];
-      for (const p of state.powerups) {
+      for (const p of incoming) {
+        if (!p || !p.type) continue;
         const match = existing.find(e =>
           e.type === p.type &&
           Math.round(e.x) === p.x &&
@@ -914,22 +926,33 @@ const Game = {
   spawnPowerup() {
     let type;
 
-    // Guarantee at least one auto-cannon per match — schedule it on the 3rd spawn
-    // (mid-game, exciting reveal). If somehow not chosen, force it on the last spawn.
+    // GUARANTEE the auto-cannon appears every match.
+    // The 2nd spawn is always auto-cannon (early enough to actually use it).
+    // If it somehow gets skipped (e.g., autoCannonSpawned already true from a
+    // stale flag), force it on the very last drop as a safety net.
     const remaining = this.maxPowerupsPerGame - this.powerupsSpawned;
-    if (!this.autoCannonSpawned && (this.powerupsSpawned === 2 || remaining === 1)) {
+    const forceNow = this.powerupsSpawned === 1; // 2nd drop (0-indexed)
+    const lastChance = remaining === 1 && !this.autoCannonSpawned;
+
+    if (forceNow || lastChance) {
       type = 'autoCannon';
       this.autoCannonSpawned = true;
     } else {
-      // Weighted random: auto-cannon stays rare among "normal" picks so it feels special
-      const pool = ['extraBullet', 'extraBullet', 'shield', 'shield', 'freeze', 'autoCannon'];
+      // Other slots: weighted random across the regular drops (no auto-cannon
+      // in the pool — it's already guaranteed above).
+      const pool = ['extraBullet', 'extraBullet', 'shield', 'shield', 'freeze'];
       type = pool[Math.floor(Math.random() * pool.length)];
-      if (type === 'autoCannon') this.autoCannonSpawned = true;
     }
 
     const pos = this.gameMap.randomSpawn(20, 80);
     this.powerups.push(new PowerUp(pos.x, pos.y, type));
-    console.log(`[Game] Spawned power-up: ${type} (${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame})`);
+
+    if (type === 'autoCannon') {
+      console.log(`%c[Game] ⚡⚡ AUTO-CANNON SPAWNED at (${Math.round(pos.x)}, ${Math.round(pos.y)}) — drop ${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame} ⚡⚡`,
+        'color: #ff5722; font-weight: bold; font-size: 14px;');
+    } else {
+      console.log(`[Game] Spawned power-up: ${type} (${this.powerupsSpawned + 1}/${this.maxPowerupsPerGame})`);
+    }
   },
 
   updateHUD() {
