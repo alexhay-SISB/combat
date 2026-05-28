@@ -518,8 +518,12 @@ const Game = {
     // ===== CLIENT MODE: don't simulate; just send input to Firebase =====
     if (this.networkRole === 'client') {
       this.sendInputToHost();
-      // Particles still update so visual effects look smooth
+      // Particles + powerup animations still update so visuals look smooth
       this.particles.update(dt);
+      // Animate powerups locally (bob + spin) even though spawning/pickup is host-side
+      for (const p of this.powerups) {
+        if (p && typeof p.update === 'function') p.update(dt);
+      }
       if (this.shakeAmount > 0) this.shakeAmount = Math.max(0, this.shakeAmount - dt * 30);
       this.updateHUD();
       return;
@@ -731,12 +735,24 @@ const Game = {
       this.timeRemaining = state.time;
     }
 
-    // Apply powerups (render-only on client)
+    // Apply powerups (render-only on client) — preserve existing instances by
+    // (type + rounded x/y) so animation state (bob/spin) doesn't reset each broadcast.
     if (state.powerups && Array.isArray(state.powerups) && typeof PowerUp !== 'undefined') {
-      this.powerups = state.powerups.map(p => {
-        const pu = new PowerUp(p.x, p.y, p.type);
-        return pu;
-      });
+      const existing = this.powerups || [];
+      const next = [];
+      for (const p of state.powerups) {
+        const match = existing.find(e =>
+          e.type === p.type &&
+          Math.round(e.x) === p.x &&
+          Math.round(e.y) === p.y
+        );
+        if (match) {
+          next.push(match);
+        } else {
+          next.push(new PowerUp(p.x, p.y, p.type));
+        }
+      }
+      this.powerups = next;
     }
   },
 
