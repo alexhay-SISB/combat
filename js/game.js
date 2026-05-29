@@ -274,10 +274,10 @@ const Game = {
 
     const diffEl = document.getElementById(`p${p}-diff`);
     if (q.difficulty === 'hard') {
-      diffEl.textContent = `HARD · 2pt · ${q.subject || ''}`;
+      diffEl.textContent = `HARD · 4pt · ${q.subject || ''}`;
       diffEl.classList.add('hard');
     } else {
-      diffEl.textContent = `EASY · 1pt · ${q.subject || ''}`;
+      diffEl.textContent = `EASY · 2pt · ${q.subject || ''}`;
       diffEl.classList.remove('hard');
     }
 
