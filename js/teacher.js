@@ -719,6 +719,14 @@ const Teacher = {
     this._firebaseAttached = true;
     console.log('[Teacher] ✓ Firebase listeners attached');
 
+    // Publish this dashboard's build version so student devices on a stale
+    // cached build auto-reload to match (no manual refresh needed). Monotonic —
+    // never lowers the stored value.
+    if (typeof window.APP_VERSION === 'number' && typeof Firebase.setAppVersion === 'function') {
+      Firebase.setAppVersion(window.APP_VERSION);
+      console.log(`[Teacher] Published app version v${window.APP_VERSION} for auto-update.`);
+    }
+
     // Re-init spectator's Firebase hook now that it's available
     if (typeof Spectator !== 'undefined' && Spectator.attachFirebase) {
       Spectator.attachFirebase();

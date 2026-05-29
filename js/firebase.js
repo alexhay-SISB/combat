@@ -362,6 +362,32 @@ class FirebaseManager {
     });
   }
 
+  // ===== App version (auto-update) =====
+  // The teacher device publishes the version it's running. Student devices
+  // listen and auto-reload if they're behind, so nobody has to manually refresh.
+
+  // Monotonic write: never lowers the stored version, so a stale device can't
+  // drag everyone backwards.
+  async setAppVersion(v) {
+    if (!this.db || typeof v !== 'number') return;
+    try {
+      const ref = this.db.ref(`tournaments/${this.tournamentId}/appVersion`);
+      await ref.transaction((cur) => (cur == null || v > cur) ? v : cur);
+    } catch (e) {
+      console.warn('Failed to set app version:', e);
+    }
+  }
+
+  listenToAppVersion(callback) {
+    if (!this.db) return;
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/appVersion`);
+    const listener = ref.on('value', (snap) => {
+      const v = snap.val();
+      if (typeof v === 'number') callback(v);
+    }, (err) => console.warn('App version listener error:', err));
+    this.listeners.set('appVersion', { unsubscribe: () => ref.off('value', listener) });
+  }
+
   // ===== Utility =====
 
   async clearTournament() {
