@@ -72,8 +72,6 @@ const Leaderboard = {
         <td>${p.wins || 0}</td>
         <td>${p.losses || 0}</td>
         <td>${p.kills || 0}</td>
-        <td>${p.quizScore || 0}</td>
-        <td><b>${p.rating}</b></td>
       </tr>
     `).join('');
   },
