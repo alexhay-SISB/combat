@@ -37,9 +37,9 @@ class PowerUp {
     this.bobPhase = Math.random() * Math.PI * 2;
     this.spinAngle = 0;
     this.alive = true;
-    // Lifetime — drops self-destruct after 10s so the map doesn't accumulate
+    // Lifetime — drops self-destruct after 15s so the map doesn't accumulate
     // uncollected pickups.
-    this.lifetime = 10.0;
+    this.lifetime = 15.0;
     this.age = 0;
   }
 
@@ -56,13 +56,13 @@ class PowerUp {
     if (this.type === 'extraBullet') {
       tank.points += 4;
     } else if (this.type === 'shield') {
-      tank.activateShield(10.0);
+      tank.activateShield(15.0);
     } else if (this.type === 'freeze') {
       for (const t of allTanks) {
-        if (t !== tank && t.alive) t.freeze(5.0);
+        if (t !== tank && t.alive) t.freeze(10.0);
       }
     } else if (this.type === 'autoCannon') {
-      tank.activateAutoCannon(8.0);  // 8 second auto-cannon
+      tank.activateAutoCannon(13.0);  // 13 second auto-cannon
     }
     this.alive = false;
   }
