@@ -56,13 +56,13 @@ class PowerUp {
     if (this.type === 'extraBullet') {
       tank.points += 4;
     } else if (this.type === 'shield') {
-      tank.activateShield(15.0);
+      tank.activateShield(10.0);
     } else if (this.type === 'freeze') {
       for (const t of allTanks) {
-        if (t !== tank && t.alive) t.freeze(10.0);
+        if (t !== tank && t.alive) t.freeze(5.0);
       }
     } else if (this.type === 'autoCannon') {
-      tank.activateAutoCannon(13.0);  // 13 second auto-cannon
+      tank.activateAutoCannon(8.0);  // 8 second auto-cannon
     }
     this.alive = false;
   }
