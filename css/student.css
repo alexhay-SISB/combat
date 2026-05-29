@@ -270,4 +270,36 @@
     padding: 6px 12px;
   }
   #powerup-legend .legend-title { display: none; }
+
+  /* === Ammo selector: move OFF the bottom corners on touch devices ===
+     The joystick sits bottom-left and the fire button bottom-right, so the
+     ammo buttons (previously bottom-left / bottom-right) were covered. Pin
+     them to the LEFT edge, vertically centered, and raise z-index so they sit
+     ABOVE the touch-control layer (which is z-index 50) and stay tappable. */
+  .ammo-selector {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    z-index: 60;
+  }
+  #p1-ammo,
+  #p2-ammo {
+    left: 12px;
+    right: auto;
+  }
+  /* Keep the active-state nudge horizontal only (vertical centering is on the
+     parent .ammo-selector, so the button transform won't fight it). */
+  #p1-ammo .ammo-btn.active { transform: translateX(4px); }
+  #p2-ammo .ammo-btn.active { transform: translateX(4px); }
+  .ammo-btn {
+    min-width: 120px;
+    padding: 8px 12px;
+  }
+}
+
+/* Kill double-tap-zoom delay/behaviour on touch screens (paired with the JS
+   gesture handlers in main.js). manipulation = allow taps, disable dbl-tap zoom. */
+html, body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }

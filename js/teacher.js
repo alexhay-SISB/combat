@@ -285,6 +285,13 @@ const RoundManager = {
     const isFirstRound = this.currentRound === 1;
     const lb = Leaderboard.getData();
 
+    // Capture the teacher's timer settings NOW and stamp them onto every pairing.
+    // localStorage is per-device, so students can't read the teacher's values —
+    // but pairings ARE synced via Firebase, so embedding the timers here guarantees
+    // every player in every match gets the SAME limits, no matter how many players.
+    const quizSecs = parseInt(localStorage.getItem(STORAGE_KEYS.quizTimer) || '60', 10);
+    const combatSecs = parseInt(localStorage.getItem(STORAGE_KEYS.combatTimer) || '120', 10);
+
     let ordered;
     if (isFirstRound) {
       ordered = [...Lobby.players].sort(() => Math.random() - 0.5);
@@ -304,6 +311,7 @@ const RoundManager = {
         p2Id: ordered[i + 1].id, p2Name: ordered[i + 1].name,
         status: 'pending', winner: null,
         round: this.currentRound,
+        quizSecs, combatSecs,
       });
     }
 
@@ -315,6 +323,7 @@ const RoundManager = {
         p2Id: null, p2Name: 'BYE',
         status: 'bye', winner: byeP.name,
         round: this.currentRound,
+        quizSecs, combatSecs,
       });
     }
     return pairs;

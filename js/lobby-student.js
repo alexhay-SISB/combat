@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v19';
+const LOBBY_VERSION = 'v20';
 
 const StudentLobby = {
   myStudentId: null,
@@ -158,9 +158,10 @@ const StudentLobby = {
     const oppName = pair.p1Id === this.myStudentId ? pair.p2Name : pair.p1Name;
     document.getElementById('paired-opponent').textContent = oppName;
 
-    // Show round info
-    const quizT = localStorage.getItem('combat:quizTimer') || '60';
-    const combatT = localStorage.getItem('combat:combatTimer') || '120';
+    // Show round info — prefer the timers stamped on the pairing (synced to all
+    // devices) so the hint matches what the match will actually use.
+    const quizT = pair.quizSecs != null ? pair.quizSecs : (localStorage.getItem('combat:quizTimer') || '60');
+    const combatT = pair.combatSecs != null ? pair.combatSecs : (localStorage.getItem('combat:combatTimer') || '120');
     document.getElementById('round-info').innerHTML = `
       Round ${pair.round} · Quiz ${quizT}s · Combat ${combatT}s
     `;
@@ -370,9 +371,14 @@ const StudentLobby = {
     const lobbyOverlay = document.getElementById('lobby-overlay');
     if (lobbyOverlay) lobbyOverlay.classList.add('hidden');
 
-    // Start the quiz on this device
-    const quizSecs = parseInt(localStorage.getItem('combat:quizTimer') || '60');
-    const combatSecs = parseInt(localStorage.getItem('combat:combatTimer') || '120');
+    // Start the quiz on this device.
+    // Prefer the timer values stamped onto the pairing by the teacher — these are
+    // synced via Firebase so EVERY player in EVERY match gets identical limits.
+    // Fall back to local storage / defaults only if an older pairing lacks them.
+    const quizSecs = parseInt(
+      pair.quizSecs != null ? pair.quizSecs : (localStorage.getItem('combat:quizTimer') || '60'), 10);
+    const combatSecs = parseInt(
+      pair.combatSecs != null ? pair.combatSecs : (localStorage.getItem('combat:combatTimer') || '120'), 10);
 
     // Set body class so CSS can hide opponent's quiz panel
     document.body.classList.add('playing-as-p' + myPlayerNum);

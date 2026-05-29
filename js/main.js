@@ -1,5 +1,30 @@
 // ===== Entry point (student page) =====
 
+// --- Disable zoom on iPad / touch screens ---------------------------------
+// iOS Safari ignores `user-scalable=no`, so a double-tap or pinch can zoom the
+// game in and leave the student stuck (no way to zoom back out mid-match).
+// These listeners kill double-tap-zoom and pinch-zoom while leaving the
+// joystick/fire buttons (which fire on touchstart) fully functional.
+(function disableZoom() {
+  // Pinch-zoom (Safari-specific gesture events)
+  document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+
+  // Double-tap-to-zoom: cancel the second tap if it lands within 300ms of the first.
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // Multi-touch pinch via touchmove (belt-and-suspenders for non-gesture browsers)
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+})();
+
 (async function () {
   // Initialize Firebase
   let firebaseOK = false;
