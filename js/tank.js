@@ -169,11 +169,7 @@ class Tank {
   autoFire(bullets) {
     if (!this.alive || this.frozen) return null;
     if (this.autoCannonFireTimer > 0) return null;
-
-    // Respect the same 5-on-screen cap (cannon type) as manual fire.
-    const mineCannon = bullets.reduce((n, b) =>
-      (b.alive && b.owner === this && b.type === 'cannon') ? n + 1 : n, 0);
-    if (mineCannon >= 5) return null;
+    // Auto-cannon power-up has NO restrictions — no 5-on-screen cap here.
 
     // Bullet exits from barrel tip
     const barrelEnd = this.bodyW / 2 + 22;
