@@ -289,8 +289,20 @@ const RoundManager = {
     // localStorage is per-device, so students can't read the teacher's values —
     // but pairings ARE synced via Firebase, so embedding the timers here guarantees
     // every player in every match gets the SAME limits, no matter how many players.
-    const quizSecs = parseInt(localStorage.getItem(STORAGE_KEYS.quizTimer) || '60', 10);
-    const combatSecs = parseInt(localStorage.getItem(STORAGE_KEYS.combatTimer) || '120', 10);
+    //
+    // Source of truth = the dropdowns the teacher is actually looking at. Reading
+    // them directly (instead of localStorage) avoids any case where the change
+    // event didn't persist, so "what the teacher selected" always wins.
+    const quizSel = document.getElementById('t-quiz-timer');
+    const combatSel = document.getElementById('t-combat-timer');
+    const quizSecs = parseInt(
+      (quizSel && quizSel.value) || localStorage.getItem(STORAGE_KEYS.quizTimer) || '60', 10);
+    const combatSecs = parseInt(
+      (combatSel && combatSel.value) || localStorage.getItem(STORAGE_KEYS.combatTimer) || '120', 10);
+    // Keep localStorage in sync with what we actually used.
+    localStorage.setItem(STORAGE_KEYS.quizTimer, String(quizSecs));
+    localStorage.setItem(STORAGE_KEYS.combatTimer, String(combatSecs));
+    console.log(`[Teacher] Round timers → quiz ${quizSecs}s · combat ${combatSecs}s`);
 
     let ordered;
     if (isFirstRound) {

@@ -48,8 +48,8 @@ class Quiz {
       this.correct++;
       this.streak++;
       this.bestStreak = Math.max(this.bestStreak, this.streak);
-      // Points doubled for all questions: easy 1→2, hard 2→4.
-      const basePts = q.difficulty === 'hard' ? 4 : 2;
+      // Points per question: easy = 5, hard = 10.
+      const basePts = q.difficulty === 'hard' ? 10 : 5;
       bonusPoints = getStreakBonus(this.streak);
       pointsEarned = basePts + bonusPoints;
       this.score += pointsEarned;
