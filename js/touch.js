@@ -8,7 +8,8 @@ const TouchInput = {
   joystickTouchId: null,
   joystickAngle: 0,
   joystickMagnitude: 0,
-  fireDown: false,
+  fireDown: false,       // button currently held (for the "pressed" visual)
+  firePressed: false,    // one-shot edge: set on each tap, consumed by InputManager
   fireTouchId: null,
 
   init() {
@@ -77,6 +78,7 @@ const TouchInput = {
     fireBtn.addEventListener('touchstart', (e) => {
       e.preventDefault();
       this.fireDown = true;
+      this.firePressed = true;   // one shot per tap — no rapid fire from holding
       this.fireTouchId = e.changedTouches[0].identifier;
       fireBtn.classList.add('pressed');
     }, { passive: false });

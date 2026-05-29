@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v24';
+const LOBBY_VERSION = 'v25';
 
 const StudentLobby = {
   myStudentId: null,

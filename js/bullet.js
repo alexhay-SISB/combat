@@ -6,7 +6,7 @@ const AMMO_TYPES = {
     cost: 1,
     speed: 580,
     radius: 5,
-    maxLifetime: 10.0,      // lingers for ricochet plays
+    maxLifetime: 7.5,       // 25% shorter lifetime
     maxBounces: 12,
     requiresBounce: true,   // must bounce off wall to kill
     color: '#ffd54f',
@@ -20,7 +20,7 @@ const AMMO_TYPES = {
     cost: 2,
     speed: 1000,
     radius: 9,              // visually larger
-    maxLifetime: 12.0,      // travels further & lingers more
+    maxLifetime: 9.0,       // 25% shorter lifetime
     maxBounces: 10,
     requiresBounce: false,
     color: '#ff5722',
@@ -34,7 +34,7 @@ const AMMO_TYPES = {
     cost: 4,
     speed: 400,
     radius: 7,
-    maxLifetime: 18.0,      // hunts for up to 18s
+    maxLifetime: 13.5,      // 25% shorter lifetime (hunts up to 13.5s)
     maxBounces: 99,         // unlimited bouncing while it hunts
     requiresBounce: false,
     seeks: true,

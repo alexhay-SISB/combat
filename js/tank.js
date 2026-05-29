@@ -138,6 +138,12 @@ class Tank {
     if (!this.alive || this.frozen) return null;
     if (this.fireCooldown > 0) return null;
 
+    // Max 5 of THIS ammo type from THIS player on screen at once. If they've hit
+    // the cap they must switch to another ammo type (or wait for some to expire).
+    const mineOfType = bullets.reduce((n, b) =>
+      (b.alive && b.owner === this && b.type === this.ammoType) ? n + 1 : n, 0);
+    if (mineOfType >= 5) return null;
+
     const def = AMMO_TYPES[this.ammoType];
     if (this.points < def.cost) return null;
 
@@ -163,6 +169,11 @@ class Tank {
   autoFire(bullets) {
     if (!this.alive || this.frozen) return null;
     if (this.autoCannonFireTimer > 0) return null;
+
+    // Respect the same 5-on-screen cap (cannon type) as manual fire.
+    const mineCannon = bullets.reduce((n, b) =>
+      (b.alive && b.owner === this && b.type === 'cannon') ? n + 1 : n, 0);
+    if (mineCannon >= 5) return null;
 
     // Bullet exits from barrel tip
     const barrelEnd = this.bodyW / 2 + 22;

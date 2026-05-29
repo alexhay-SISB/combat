@@ -48,7 +48,9 @@ class InputManager {
 
       // Fire — space (or enter as alternate). Both fire flags set; the inactive
       // slot's flag is harmlessly consumed elsewhere.
-      if (k === ' ' || k === 'enter') {
+      // NO RAPID FIRE: ignore the OS key-repeat (e.repeat) so holding the key
+      // fires exactly ONE shot. The player must release and press again to fire.
+      if ((k === ' ' || k === 'enter') && !e.repeat) {
         this.p1FirePressed = true;
         this.p2FirePressed = true;
         e.preventDefault();
@@ -87,11 +89,8 @@ class InputManager {
     this.p2.forward = fwd;  this.p2.backward = bwd;
     this.p2.left    = lft;  this.p2.right    = rht;
 
-    // Held fire (autofire while spacebar / enter held)
-    if (this.keys.has(' ') || this.keys.has('enter')) {
-      this.p1FirePressed = true;
-      this.p2FirePressed = true;
-    }
+    // NOTE: No held-fire here. Holding space/enter must NOT autofire — firing is
+    // edge-triggered in the keydown handler (one shot per physical press).
 
     // === Touch input (iPad) — drives both slots ===
     if (typeof TouchInput !== 'undefined' && TouchInput.active) {
@@ -106,7 +105,10 @@ class InputManager {
         this.p1.touchTarget = null;
         this.p2.touchTarget = null;
       }
-      if (TouchInput.fireDown) {
+      // NO RAPID FIRE: consume the one-shot edge flag set on each fire-button
+      // TAP (not the held fireDown state), so holding the button fires once.
+      if (TouchInput.firePressed) {
+        TouchInput.firePressed = false;
         this.p1FirePressed = true;
         this.p2FirePressed = true;
       }
