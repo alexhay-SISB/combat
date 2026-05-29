@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v20';
+const LOBBY_VERSION = 'v21';
 
 const StudentLobby = {
   myStudentId: null,
@@ -112,6 +112,12 @@ const StudentLobby = {
     sessionStorage.setItem('combat:myName', this.myName);
 
     this.enterWaiting();
+
+    // Reconnect support: if this name is already in a live match, drop straight
+    // back into it rather than waiting. Run now (cached snapshot) AND once more
+    // shortly after, to catch the case where Firebase data lands a beat later.
+    this.checkForActiveMatch();
+    setTimeout(() => this.checkForActiveMatch(), 800);
   },
 
   leaveLobby() {
@@ -287,17 +293,34 @@ const StudentLobby = {
   },
 
   handlePairingsUpdate(pairingsObj) {
+    // Always cache the latest snapshot — even before this player has an ID —
+    // so checkForActiveMatch() can re-evaluate it the instant they (re)join.
+    this._lastPairings = pairingsObj || {};
+
     if (!this.myStudentId) return;
 
     // Find my pair in the Firebase pairings object
     let myPair = null;
-    Object.values(pairingsObj).forEach(pairing => {
+    Object.values(this._lastPairings).forEach(pairing => {
       if (pairing.p1Id === this.myStudentId || pairing.p2Id === this.myStudentId) {
         myPair = pairing;
       }
     });
 
     this.processMyPair(myPair);
+  },
+
+  // Called right after (re)joining with a name. If this player was already
+  // paired into a live match (e.g. they got disconnected mid-quiz and are
+  // rejoining with the same name → same student ID), jump STRAIGHT back into
+  // the match instead of sitting in the waiting room. Checks the cached
+  // Firebase snapshot first, then the localStorage fallback.
+  checkForActiveMatch() {
+    if (!this.myStudentId) return;
+    if (this._lastPairings) {
+      this.handlePairingsUpdate(this._lastPairings);
+    }
+    this.poll(); // localStorage fallback path
   },
 
   poll() {
