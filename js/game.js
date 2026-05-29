@@ -578,6 +578,17 @@ const Game = {
           b.netTargetX += (b.vx || 0) * dt;
           b.netTargetY += (b.vy || 0) * dt;
         }
+        // Drive the real Bullet visuals (trail + pulse) locally so the client's
+        // glow/trail/seeker-pulse animate identically to the host's.
+        if (b.def && typeof b.pulsePhase === 'number') {
+          b.pulsePhase += dt * 8;
+          if (Array.isArray(b.trail)) {
+            b.trail.push({ x: b.x, y: b.y, angle: b.angle || 0, life: 1 });
+            const maxLen = (b.def.trailLength || 8);
+            if (b.trail.length > maxLen) b.trail.shift();
+            for (const t of b.trail) t.life -= dt * 3;
+          }
+        }
       }
 
       // Particles + powerup animations still update so visuals look smooth
@@ -854,6 +865,8 @@ const Game = {
           }
         }
 
+        const angle = (vx !== 0 || vy !== 0) ? Math.atan2(vy, vx) : (b.angle || 0);
+
         if (bestMatch !== null) {
           used.add(bestMatch);
           const existing = oldBullets[bestMatch];
@@ -865,26 +878,39 @@ const Game = {
           existing.netTargetY = b.y;
           existing.vx = vx;
           existing.vy = vy;
+          existing.angle = angle;
           return existing;
         }
 
-        // New bullet — create fresh. Set both current and target to broadcast
-        // pos so the first frame doesn't try to lerp from (0,0).
-        return {
-          x: b.x, y: b.y,
-          netTargetX: b.x, netTargetY: b.y,
-          vx: vx, vy: vy, type: b.type,
-          def: ammo || { color: '#fff', size: 4 },
-          alive: true,
-          draw: function(ctx) {
-            ctx.save();
-            ctx.fillStyle = this.def.color;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.def.size || 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
-        };
+        // New bullet — create a REAL Bullet instance so the client renders the
+        // exact same high-fidelity visuals (glow, trail, shell/dart shapes) as
+        // the host. We don't run its update()/collision — the client only lerps
+        // position from the host's broadcast — but its draw() is identical.
+        let nb;
+        if (typeof Bullet !== 'undefined' && ammo) {
+          nb = new Bullet(b.x, b.y, angle, b.type, null);
+          nb.vx = vx;
+          nb.vy = vy;
+        } else {
+          // Fallback if Bullet/AMMO_TYPES unavailable
+          nb = {
+            x: b.x, y: b.y, type: b.type,
+            def: ammo || { color: '#fff', radius: 5 },
+            radius: (ammo && ammo.radius) || 5,
+            angle, trail: [], pulsePhase: 0, alive: true,
+            draw: function(ctx) {
+              ctx.save();
+              ctx.fillStyle = this.def.color || '#fff';
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          };
+        }
+        nb.netTargetX = b.x;
+        nb.netTargetY = b.y;
+        return nb;
       });
     }
 
