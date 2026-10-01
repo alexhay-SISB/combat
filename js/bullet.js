@@ -338,3 +338,4 @@ class Bullet {
     ctx.restore();
   }
 }
+

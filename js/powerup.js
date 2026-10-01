@@ -126,3 +126,4 @@ class PowerUp {
     ctx.restore();
   }
 }
+

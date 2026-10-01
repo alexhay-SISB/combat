@@ -98,3 +98,4 @@ const TouchInput = {
     this.joystickMagnitude = clampedDist / maxRadius;
   }
 };
+

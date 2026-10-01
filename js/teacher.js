@@ -114,9 +114,9 @@ const Lobby = {
     const input = document.getElementById('add-player-input');
     const addBtn = document.getElementById('add-player-btn');
 
-    const tryAdd = () => {
+    const tryAdd = async () => {
       const name = input.value.trim();
-      if (this.addPlayer(name)) input.value = '';
+      if (await this.addPlayer(name)) input.value = '';
       input.focus();
     };
 
@@ -132,61 +132,47 @@ const Lobby = {
     return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   },
 
-  addPlayer(name) {
+  async addPlayer(name) {
     if (!name) return false;
-    if (this.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      alert(`"${name}" is already in the lobby.`);
+    try {
+      const player = await Firebase.registerPlayer(name);
+      this.players = this.players.filter(p => p.name.trim().toLowerCase() !== player.name.trim().toLowerCase());
+      this.players.push(player);
+      this.save();
+      this.render();
+      return true;
+    } catch (error) {
+      Firebase.reportError(error);
       return false;
     }
-    this.players.push({ id: this.makeId(), name, joinedAt: Date.now() });
-    this.save();
-    this.render();
-    return true;
   },
 
-  removePlayer(id) {
-    this.players = this.players.filter(p => p.id !== id);
-    this.save();
-    this.render();
+  async removePlayer(id) {
+    try {
+      await Firebase.setPlayerActive(id, false);
+      this.players = this.players.filter(p => p.id !== id);
+      this.save();
+      this.render();
+    } catch (error) { Firebase.reportError(error); }
   },
 
-  bulkAdd() {
+  async bulkAdd() {
     const ta = document.getElementById('bulk-add-input');
-    const names = ta.value.split('\n').map(s => s.trim()).filter(s => s);
-    let added = 0;
-    for (const name of names) {
-      if (!this.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-        this.players.push({ id: this.makeId() + added, name, joinedAt: Date.now() + added });
-        added++;
-      }
-    }
-    if (added > 0) {
-      this.save();
-      this.render();
-      ta.value = '';
+    const names = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+    let ok = true;
+    for (const name of names) if (!await this.addPlayer(name)) { ok = false; break; }
+    if (ok) ta.value = '';
+  },
+
+  async addSamplePlayers() {
+    for (const name of ['Alex', 'Sam', 'Jordan', 'Casey', 'Riley', 'Morgan', 'Taylor', 'Quinn']) {
+      if (!await this.addPlayer(name)) break;
     }
   },
 
-  addSamplePlayers() {
-    const samples = ['Alex', 'Sam', 'Jordan', 'Casey', 'Riley', 'Morgan', 'Taylor', 'Quinn'];
-    let added = 0;
-    for (const name of samples) {
-      if (!this.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-        this.players.push({ id: this.makeId() + added, name, joinedAt: Date.now() + added });
-        added++;
-      }
-    }
-    if (added > 0) {
-      this.save();
-      this.render();
-    }
-  },
-
-  clearAll() {
+  async clearAll() {
     if (!confirm('Remove all players from the lobby?')) return;
-    this.players = [];
-    this.save();
-    this.render();
+    for (const player of [...this.players]) await this.removePlayer(player.id);
   },
 
   render() {
@@ -242,14 +228,16 @@ const RoundManager = {
     }
   },
 
-  save() {
+  async save() {
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) {
+      alert('Multiplayer is not ready. Check your connection and reload the page.');
+      return false;
+    }
+    if (!await Firebase.setPairings(this.pairings)) return false;
     localStorage.setItem(STORAGE_KEYS.currentRound, String(this.currentRound));
     localStorage.setItem(STORAGE_KEYS.pairings, JSON.stringify(this.pairings));
 
-    // Also save pairings to Firebase
-    if (Firebase && Firebase.isInitialized()) {
-      Firebase.setPairings(this.pairings).catch(e => console.warn('Firebase setPairings failed:', e));
-    }
+    return true;
   },
 
   wire() {
@@ -257,7 +245,8 @@ const RoundManager = {
     document.getElementById('reset-round-btn').addEventListener('click', () => this.reset());
   },
 
-  startRound() {
+  async startRound() {
+    if (this._starting) return;
     if (Lobby.players.length < 2) {
       alert('Need at least 2 players in the lobby.');
       return;
@@ -267,18 +256,31 @@ const RoundManager = {
       if (!confirm('There are unfinished matches in the current round. Start a new round anyway?')) return;
     }
 
-    this.currentRound++;
-    this.pairings = this.createPairings();
-
-    // Auto-launch all non-bye matches — students will start on their own devices
-    this.pairings.forEach(p => {
-      if (p.status !== 'bye') {
-        p.status = 'in_progress';
+    this._starting = true;
+    document.getElementById('start-round-btn').disabled = true;
+    try {
+      const canonical = [];
+      for (const player of [...Lobby.players]) {
+        canonical.push(await Firebase.registerPlayer(player.name, player.id));
       }
-    });
+      Lobby.players = [...new Map(canonical.map(p => [p.id, p])).values()];
+      Lobby.save();
+      Lobby.render();
+      if (Lobby.players.length < 2) throw new Error('Need two different players to start a round.');
+      this.currentRound++;
+      this.pairings = this.createPairings();
 
-    this.save();
-    this.render();
+      // Auto-launch all non-bye matches — students will start on their own devices
+      this.pairings.forEach(p => {
+        if (p.status !== 'bye') {
+          p.status = 'in_progress';
+        }
+      });
+
+      if (!await this.save()) { this.load(); }
+      this.render();
+    } catch (error) { Firebase.reportError(error); }
+    finally { this._starting = false; document.getElementById('start-round-btn').disabled = false; }
   },
 
   createPairings() {
@@ -318,7 +320,7 @@ const RoundManager = {
     const pairs = [];
     for (let i = 0; i < ordered.length - 1; i += 2) {
       pairs.push({
-        matchId: 'm' + Date.now().toString(36) + '_' + i,
+        matchId: 'm' + Date.now().toString(36) + '_r' + this.currentRound + '_' + i,
         p1Id: ordered[i].id, p1Name: ordered[i].name,
         p2Id: ordered[i + 1].id, p2Name: ordered[i + 1].name,
         status: 'pending', winner: null,
@@ -330,7 +332,7 @@ const RoundManager = {
     if (ordered.length % 2 === 1) {
       const byeP = ordered[ordered.length - 1];
       pairs.push({
-        matchId: 'm' + Date.now().toString(36) + '_bye',
+        matchId: 'm' + Date.now().toString(36) + '_r' + this.currentRound + '_bye',
         p1Id: byeP.id, p1Name: byeP.name,
         p2Id: null, p2Name: 'BYE',
         status: 'bye', winner: byeP.name,
@@ -341,7 +343,7 @@ const RoundManager = {
     return pairs;
   },
 
-  playMatch(matchId) {
+  async playMatch(matchId) {
     const pair = this.pairings.find(p => p.matchId === matchId);
     if (!pair || pair.status === 'done' || pair.status === 'bye') return;
 
@@ -351,16 +353,17 @@ const RoundManager = {
     localStorage.setItem(STORAGE_KEYS.currentMatchId, matchId);
 
     pair.status = 'in_progress';
-    this.save(); // Writes to Firebase too — students will detect and auto-launch
+    if (!await this.save()) this.load(); // Only acknowledge a published pairing.
     this.render();
 
     // No window.open() — students launch on their own devices via Firebase listener
   },
 
-  reset() {
+  async reset() {
     if (!confirm('Reset current round? Pending pairings will be cleared.')) return;
     this.currentRound = 0;
     this.pairings = [];
+    if (!await this.save()) { this.load(); return; }
     localStorage.removeItem(STORAGE_KEYS.currentRound);
     localStorage.removeItem(STORAGE_KEYS.pairings);
     localStorage.removeItem(STORAGE_KEYS.currentMatchId);
@@ -756,28 +759,19 @@ const Teacher = {
       Leaderboard.render();
     });
 
-    // Listen to the players list so the teacher sees students appear in real time
-    Firebase.db.ref(`tournaments/${Firebase.tournamentId}/players`).on('value', (snap) => {
-      const data = snap.val() || {};
-      // Filter out any entries that don't have a usable name (defensive — bad data from old wipes)
-      const players = Object.entries(data)
-        .filter(([id, p]) => p && typeof p.name === 'string' && p.name.trim().length > 0)
-        .map(([id, p]) => ({ id, name: p.name, joinedAt: Date.now() }));
-
-      // Also clean any corrupted entries in the local list before merging
-      const cleanLocal = (Lobby.players || []).filter(
-        m => m && typeof m.name === 'string' && m.name.trim().length > 0
-      );
-
-      const merged = [...cleanLocal];
-      for (const p of players) {
-        if (!merged.some(m => m.name.toLowerCase() === p.name.toLowerCase())) {
-          merged.push(p);
-        }
-      }
-      Lobby.players = merged;
+    Firebase.listenToPlayers(players => {
+      // The cloud roster is authoritative. Local IDs must never shadow a
+      // student's registered ID just because the display names match.
+      Lobby.players = players.filter(p => p.active !== false);
       Lobby.save();
       Lobby.render();
+    });
+    Firebase.listenToPairings(pairings => {
+      RoundManager.pairings = Object.values(pairings || {});
+      RoundManager.currentRound = Math.max(0, ...RoundManager.pairings.map(p => p.round || 0));
+      localStorage.setItem(STORAGE_KEYS.pairings, JSON.stringify(RoundManager.pairings));
+      localStorage.setItem(STORAGE_KEYS.currentRound, String(RoundManager.currentRound));
+      RoundManager.render();
     });
   },
 
@@ -996,3 +990,4 @@ const Teacher = {
 };
 
 document.addEventListener('DOMContentLoaded', () => Teacher.init());
+

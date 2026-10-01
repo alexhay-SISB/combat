@@ -40,7 +40,7 @@
   }
 
   // Show connection badge in lobby
-  showConnectionBadge(firebaseOK);
+  showConnectionBadge(firebaseOK && Firebase.connected, firebaseOK);
 
   const canvas = document.getElementById('game-canvas');
   Game.init(canvas);
@@ -77,7 +77,7 @@
 })();
 
 // Small floating badge so the user can SEE whether multi-device sync is on.
-function showConnectionBadge(connected) {
+function showConnectionBadge(connected, available) {
   const b = document.createElement('div');
   b.id = 'fb-status-badge';
   b.style.cssText = `
@@ -88,6 +88,7 @@ function showConnectionBadge(connected) {
     color: white; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     pointer-events: none;
   `;
-  b.textContent = connected ? '● MULTI-DEVICE' : '● OFFLINE (local only)';
+  b.textContent = connected ? '● CONNECTED' : (available ? '● CONNECTING…' : '● MULTIPLAYER UNAVAILABLE');
   document.body.appendChild(b);
 }
+

@@ -186,3 +186,4 @@ The database structure looks like:
 Check the console for detailed error messages (F12 → Console tab). All Firebase operations log their status.
 
 Good luck, and have fun with Combat! 🎮
+

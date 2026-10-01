@@ -84,3 +84,4 @@ class ParticleSystem {
     ctx.globalAlpha = 1;
   }
 }
+

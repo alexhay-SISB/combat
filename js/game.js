@@ -1290,3 +1290,4 @@ const Game = {
     localStorage.removeItem('combat:currentMatchId');
   }
 };
+

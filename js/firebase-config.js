@@ -26,3 +26,4 @@ const FIREBASE_CONFIG = {
 //     {playerId}: { name, wins, losses, kills, quizScore, rating }
 
 const TOURNAMENT_ID = "default"; // Change if running multiple tournaments
+

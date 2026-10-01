@@ -5,6 +5,8 @@ class FirebaseManager {
   constructor() {
     this.db = null;
     this.initialized = false;
+    this.connected = false;
+    this.lastError = null;
     this.listeners = new Map(); // key -> { unsubscribe, callback }
     this.tournamentId = TOURNAMENT_ID || 'default';
   }
@@ -29,11 +31,12 @@ class FirebaseManager {
       // Connection ping — proves RTDB is actually reachable (not just SDK loaded)
       this.db.ref('.info/connected').on('value', (snap) => {
         const connected = !!snap.val();
+        this.connected = connected;
         console.log(`[Firebase] RTDB connection: ${connected ? '✓ ONLINE' : '✗ OFFLINE'}`);
         const badge = document.getElementById('fb-status-badge');
         if (badge) {
-          badge.textContent = connected ? '● MULTI-DEVICE' : '● RECONNECTING…';
-          badge.style.background = connected ? 'rgba(76,175,80,0.9)' : 'rgba(255,152,0,0.95)';
+          badge.textContent = this.lastError ? '● SYNC ERROR — see message' : (connected ? '● CONNECTED' : '● RECONNECTING…');
+          badge.style.background = connected && !this.lastError ? 'rgba(76,175,80,0.9)' : 'rgba(255,152,0,0.95)';
         }
       });
 
@@ -57,23 +60,100 @@ class FirebaseManager {
 
   // ===== Player Management =====
 
-  async addPlayer(playerId, playerName) {
-    if (!this.db) return false;
-    try {
-      await this.db.ref(`tournaments/${this.tournamentId}/players/${playerId}`).set({
-        name: playerName,
-        score: 0,
-        wins: 0,
-        losses: 0,
-        kills: 0,
-        quizScore: 0,
-        rating: 1600
-      });
-      return true;
-    } catch (e) {
-      console.error('Failed to add player:', e);
-      return false;
+  reportError(error) {
+    this.lastError = error;
+    const badge = document.getElementById('fb-status-badge');
+    if (badge) { badge.textContent = '● SYNC ERROR'; badge.style.background = '#8b2020'; }
+    console.error('[Firebase] Synchronisation failed:', error);
+    let notice = document.getElementById('sync-error');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'sync-error';
+      notice.setAttribute('role', 'alert');
+      notice.style.cssText = 'position:fixed;top:40px;left:10px;right:10px;z-index:100000;background:#8b2020;color:white;padding:12px;border-radius:8px;';
+      document.body.appendChild(notice);
     }
+    const denied = /permission|denied/i.test(String(error && (error.code || error.message) || error));
+    notice.textContent = denied
+      ? 'Multiplayer access was denied by Firebase. Ask the teacher to check this project’s Realtime Database rules. Players cannot join until access is restored.'
+      : 'Multiplayer could not synchronise. Check your connection and retry. ' + (error.message || '');
+  }
+
+  async confirmWithin(operation, milliseconds = 15000) {
+    let timer;
+    try {
+      return await Promise.race([operation, new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('Server confirmation timed out. Reconnect and retry.')), milliseconds);
+      })]);
+    } finally { clearTimeout(timer); }
+  }
+
+  clearError() {
+    this.lastError = null;
+    const notice = document.getElementById('sync-error');
+    if (notice) notice.remove();
+    const badge = document.getElementById('fb-status-badge');
+    if (badge && this.connected) { badge.textContent = '● CONNECTED'; badge.style.background = 'rgba(76,175,80,0.9)'; }
+  }
+
+  // Resolve a name to ONE shared ID. Transactions retry concurrent joins, and
+  // preserve existing records and scores instead of overwriting them on rejoin.
+  async registerPlayer(playerName, preferredId) {
+    if (!this.db) throw new Error('The multiplayer service is not available. Reload the page and try again.');
+    const name = String(playerName || '').trim();
+    if (!name) throw new Error('Enter a player name.');
+    const key = name.toLowerCase();
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/players`);
+    const newId = preferredId || ref.push().key;
+    const result = await this.confirmWithin(ref.transaction(current => {
+      const players = current || {};
+      const existingId = Object.keys(players).sort().find(id =>
+        players[id] && typeof players[id].name === 'string' &&
+        players[id].name.trim().toLowerCase() === key);
+      // Never reuse a local ID belonging to a different name in the cloud.
+      const id = existingId || (players[newId] ? ref.push().key : newId);
+      players[id] = existingId ? { ...players[id], active: true } : {
+        name, active: true, joinedAt: Date.now(), score: 0, wins: 0,
+        losses: 0, kills: 0, quizScore: 0, rating: 1600
+      };
+      return players;
+    }, undefined, false));
+    if (!result.committed) throw new Error('Player registration was not saved. Please retry.');
+    const entry = Object.entries(result.snapshot.val() || {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).find(
+      ([id, player]) => player && typeof player.name === 'string' && player.name.trim().toLowerCase() === key);
+    if (!entry) throw new Error('Player registration could not be confirmed.');
+    this.clearError();
+    return { ...entry[1], id: entry[0] };
+  }
+
+  async addPlayer(playerId, playerName) {
+    try { await this.registerPlayer(playerName, playerId); return true; }
+    catch (error) { this.reportError(error); return false; }
+  }
+
+  async setPlayerActive(playerId, active) {
+    if (!this.db) throw new Error('The multiplayer service is not available.');
+    await this.db.ref(`tournaments/${this.tournamentId}/players/${playerId}`).update({ active });
+  }
+
+  listenToPlayers(callback) {
+    if (!this.db) return;
+    this.unlisten('players');
+    const ref = this.db.ref(`tournaments/${this.tournamentId}/players`);
+    const listener = ref.on('value', snap => {
+      const players = Object.entries(snap.val() || {}).filter(([id, p]) =>
+        p && typeof p.name === 'string' && p.name.trim()).map(([id, p]) => ({ ...p, id }));
+      // Legacy versions could create multiple cloud IDs for the same name.
+      // Display the same canonical record that registerPlayer resolves.
+      const names = new Set();
+      callback(players.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0).filter(player => {
+        const key = player.name.trim().toLowerCase();
+        if (names.has(key)) return false;
+        names.add(key);
+        return true;
+      }));
+    }, error => this.reportError(error));
+    this.listeners.set('players', { unsubscribe: () => ref.off('value', listener) });
   }
 
   async updatePlayerStats(playerId, stats) {
@@ -96,23 +176,25 @@ class FirebaseManager {
       pairingsArray.forEach((pairing, idx) => {
         pairingsObj[`match${idx}`] = pairing;
       });
-      await this.db.ref(`tournaments/${this.tournamentId}/pairings`).set(pairingsObj);
+      await this.confirmWithin(this.db.ref(`tournaments/${this.tournamentId}/pairings`).set(pairingsObj));
+      this.clearError();
       return true;
     } catch (e) {
-      console.error('Failed to set pairings:', e);
+      this.reportError(e);
       return false;
     }
   }
 
   listenToPairings(callback) {
     if (!this.db) return;
+    this.unlisten('pairings');
     const ref = this.db.ref(`tournaments/${this.tournamentId}/pairings`);
 
     const listener = ref.on('value', (snap) => {
       const data = snap.val();
       callback(data || {});
     }, (err) => {
-      console.error('Pairings listener error:', err);
+      this.reportError(err);
     });
 
     // Store unsubscribe method
@@ -282,6 +364,18 @@ class FirebaseManager {
       p2Data.rating = (p2Data.wins || 0) * 100 + (p2Data.kills || 0) * 5 + (p2Data.quizScore || 0);
       await p2Ref.update(p2Data);
 
+      // Update only this match's pairing; don't overwrite a newer round.
+      await this.db.ref(`tournaments/${this.tournamentId}/pairings`).transaction(pairings => {
+        if (!pairings) return;
+        for (const pair of Object.values(pairings)) {
+          if (pair && pair.matchId === matchId) {
+            Object.assign(pair, { status: 'done', winner: winnerName || 'draw',
+              p1Kills, p2Kills, p1QuizScore, p2QuizScore });
+          }
+        }
+        return pairings;
+      }, undefined, false);
+
       return true;
     } catch (e) {
       console.error('Failed to end match:', e);
@@ -421,3 +515,4 @@ class FirebaseManager {
 
 // Global instance
 const Firebase = new FirebaseManager();
+

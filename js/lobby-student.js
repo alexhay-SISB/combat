@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v26';
+const LOBBY_VERSION = 'v27';
 
 const StudentLobby = {
   myStudentId: null,
@@ -81,60 +81,48 @@ const StudentLobby = {
     leaveBtn.addEventListener('click', () => this.leaveLobby());
   },
 
-  joinLobby(name) {
-    // Read current player list
-    let players = [];
-    try { players = JSON.parse(localStorage.getItem('combat:players') || '[]'); }
-    catch (e) { players = []; }
-
-    // Defensive: drop any entries that don't have a usable name
-    players = (Array.isArray(players) ? players : []).filter(
-      p => p && typeof p.name === 'string' && p.name.trim().length > 0
-    );
-
-    // Reuse ID if name already exists (no duplicate adds)
-    let existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-      this.myStudentId = existing.id;
-    } else {
-      this.myStudentId = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      players.push({ id: this.myStudentId, name, joinedAt: Date.now() });
-      localStorage.setItem('combat:players', JSON.stringify(players));
+  async joinLobby(name) {
+    if (this._joining) return;
+    this._joining = true;
+    const button = document.getElementById('lobby-join-btn');
+    button.disabled = true;
+    const label = button.textContent;
+    button.textContent = 'Joining…';
+    try {
+      if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) {
+        throw new Error('Multiplayer is not ready. Check your connection and reload the page.');
+      }
+      // Joining succeeds only after the shared database confirms the identity.
+      const player = await Firebase.registerPlayer(name);
+      this.myStudentId = player.id;
+      this.myName = player.name;
+      sessionStorage.setItem('combat:myStudentId', player.id);
+      sessionStorage.setItem('combat:myName', player.name);
+      this.enterWaiting();
+      this.checkForActiveMatch();
+    } catch (error) {
+      if (typeof Firebase !== 'undefined') Firebase.reportError(error);
+      else alert(error.message);
+    } finally {
+      this._joining = false;
+      button.disabled = false;
+      button.textContent = label;
     }
-    this.myName = name;
-
-    // Also add player to Firebase if available
-    if (Firebase && Firebase.isInitialized()) {
-      Firebase.addPlayer(this.myStudentId, name).catch(e => console.warn('Firebase addPlayer failed:', e));
-    }
-
-    sessionStorage.setItem('combat:myStudentId', this.myStudentId);
-    sessionStorage.setItem('combat:myName', this.myName);
-
-    this.enterWaiting();
-
-    // Reconnect support: if this name is already in a live match, drop straight
-    // back into it rather than waiting. Run now (cached snapshot) AND once more
-    // shortly after, to catch the case where Firebase data lands a beat later.
-    this.checkForActiveMatch();
-    setTimeout(() => this.checkForActiveMatch(), 800);
   },
 
-  leaveLobby() {
+  async leaveLobby() {
     if (!confirm('Leave the lobby? Your name will be removed.')) return;
-
-    if (this.myStudentId) {
-      let players = [];
-      try { players = JSON.parse(localStorage.getItem('combat:players') || '[]'); }
-      catch (e) { players = []; }
-      players = players.filter(p => p.id !== this.myStudentId);
-      localStorage.setItem('combat:players', JSON.stringify(players));
+    try {
+      if (this.myStudentId) await Firebase.setPlayerActive(this.myStudentId, false);
+    } catch (error) {
+      Firebase.reportError(error);
+      return;
     }
-
     sessionStorage.removeItem('combat:myStudentId');
     sessionStorage.removeItem('combat:myName');
     this.myStudentId = null;
     this.myName = null;
+    this.launchedMatchId = null;
     this.enterNameEntry();
   },
 
@@ -211,10 +199,16 @@ const StudentLobby = {
       });
       this.firebaseListenerActive = true;
 
-      // Also (re)add this player to Firebase, in case they joined before Firebase came online
-      if (this.myStudentId && this.myName) {
-        Firebase.addPlayer(this.myStudentId, this.myName).catch(e => console.warn('Firebase addPlayer (late) failed:', e));
-      }
+
+    }
+
+    if (!this.playersListenerActive) {
+      this.playersListenerActive = true;
+      Firebase.listenToPlayers(players => {
+        this._players = players.filter(p => p.active !== false);
+        localStorage.setItem('combat:players', JSON.stringify(this._players));
+        if (this.state === 'waiting') this.updateLobbyInfo();
+      });
     }
 
     if (!this.leaderboardListenerActive) {
@@ -296,6 +290,7 @@ const StudentLobby = {
     // Always cache the latest snapshot — even before this player has an ID —
     // so checkForActiveMatch() can re-evaluate it the instant they (re)join.
     this._lastPairings = pairingsObj || {};
+    localStorage.setItem('combat:pairings', JSON.stringify(Object.values(this._lastPairings)));
 
     if (!this.myStudentId) return;
 
@@ -320,11 +315,11 @@ const StudentLobby = {
     if (this._lastPairings) {
       this.handlePairingsUpdate(this._lastPairings);
     }
-    this.poll(); // localStorage fallback path
+    if (!this.firebaseListenerActive) this.poll();
   },
 
   poll() {
-    if (!this.myStudentId) return;
+    if (!this.myStudentId || this.firebaseListenerActive) return;
 
     // Check pairings for my matchup (localStorage fallback)
     let pairings = [];
@@ -344,6 +339,7 @@ const StudentLobby = {
 
   // Shared logic for both Firebase and localStorage paths
   processMyPair(myPair) {
+    if (this.state === 'in_match') return;
     if (myPair) {
       if (myPair.status === 'done') {
         if (this.state !== 'waiting') this.enterWaiting();
@@ -431,7 +427,11 @@ const StudentLobby = {
       // Detach firebase match listeners (we'll re-attach when a new match starts)
       if (typeof Firebase !== 'undefined' && Firebase.isInitialized) {
         try {
-          if (Game.matchId) Firebase.unlisten(`match:${Game.matchId}`);
+          if (Game.matchId) {
+            Firebase.unlisten(`match:${Game.matchId}`);
+            Firebase.unlisten(`input:${Game.matchId}:p2`);
+            Firebase.unlisten(`quizScores:${Game.matchId}`);
+          }
         } catch (e) {}
       }
     }
@@ -451,8 +451,8 @@ const StudentLobby = {
     sessionStorage.removeItem('combat:isHost');
     localStorage.removeItem('combat:currentMatchId');
 
-    // Reset launch guard so we can be paired into a new match
-    this.launchedMatchId = null;
+    // Retain the completed match ID so a delayed snapshot cannot relaunch it.
+    // A new round has a different match ID and launches normally.
 
     // Restore the original lobby overlay HTML (endMatch replaced it with results).
     const overlay = document.getElementById('lobby-overlay');
@@ -475,7 +475,9 @@ const StudentLobby = {
     if (this._lastLeaderboard) {
       this.renderLeaderboard(this._lastLeaderboard);
     }
+    this.checkForActiveMatch();
   }
 };
 
 document.addEventListener('DOMContentLoaded', () => StudentLobby.init());
+

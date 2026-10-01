@@ -120,3 +120,4 @@ See: FIREBASE_SETUP.md (full setup guide with screenshots)
 See: FIREBASE_INTEGRATION.md (technical details)
 
 ═══════════════════════════════════════════════════════════════════════════════
+

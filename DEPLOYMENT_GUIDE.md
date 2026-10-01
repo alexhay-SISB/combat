@@ -285,3 +285,4 @@ Good luck, and enjoy your multiplayer Combat game! 🎮
 - `FIREBASE_SETUP.md` — Detailed Firebase setup
 - `FIREBASE_INTEGRATION.md` — Technical architecture
 - This file — Deployment guide
+

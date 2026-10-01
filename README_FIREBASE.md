@@ -151,3 +151,4 @@ Latest commit: Firebase integration complete with documentation
 Next: Create your Firebase project (5 minutes), then deploy to GitHub Pages, then test on iPads.
 
 Good luck, and have fun! 🎮
+
