@@ -11,49 +11,45 @@ class FirebaseManager {
     this.tournamentId = TOURNAMENT_ID || 'default';
   }
 
-  // Initialize Firebase (called from student.html and teacher.html)
+  // Database writes require auth != null in this project's existing rules.
+  // Share startup so no caller writes before anonymous sign-in completes.
   async init(config) {
     if (this.initialized) return true;
+    if (this._initializing) return this._initializing;
+    this._initializing = this.initializeAuthenticated(config);
+    try { return await this._initializing; }
+    finally { this._initializing = null; }
+  }
 
+  async initializeAuthenticated(config) {
     try {
-      // The compat SDK exposes `firebase` on window.
-      if (!window.firebase || !firebase.initializeApp) {
-        console.error('[Firebase] SDK not loaded as compat — check that the HTML uses firebase-app-compat.js and firebase-database-compat.js.');
-        return false;
+      if (!window.firebase || !firebase.initializeApp || !firebase.auth) {
+        throw new Error('Firebase could not load. Check your connection and reload this page.');
       }
-
-      // initializeApp is synchronous in compat SDK; no await needed
-      firebase.initializeApp(config);
+      if (!firebase.apps.length) firebase.initializeApp(config);
+      const auth = firebase.auth();
+      if (!auth.currentUser) {
+        await this.confirmWithin(auth.signInAnonymously());
+      }
+      if (!auth.currentUser) throw new Error('Firebase sign-in could not be confirmed. Reload and try again.');
       this.db = firebase.database();
       this.initialized = true;
-      console.log('[Firebase] ✓ initialized — tournament:', this.tournamentId);
+      this.clearError();
+      console.log('[Firebase] Anonymous session ready — tournament:', this.tournamentId);
 
-      // Connection ping — proves RTDB is actually reachable (not just SDK loaded)
-      this.db.ref('.info/connected').on('value', (snap) => {
-        const connected = !!snap.val();
-        this.connected = connected;
-        console.log(`[Firebase] RTDB connection: ${connected ? '✓ ONLINE' : '✗ OFFLINE'}`);
+      this.db.ref('.info/connected').on('value', snap => {
+        this.connected = !!snap.val();
         const badge = document.getElementById('fb-status-badge');
         if (badge) {
-          badge.textContent = this.lastError ? '● SYNC ERROR — see message' : (connected ? '● CONNECTED' : '● RECONNECTING…');
-          badge.style.background = connected && !this.lastError ? 'rgba(76,175,80,0.9)' : 'rgba(255,152,0,0.95)';
+          badge.textContent = this.lastError ? '● SYNC ERROR' : (this.connected ? '● CONNECTED' : '● RECONNECTING…');
+          badge.style.background = this.connected && !this.lastError ? 'rgba(76,175,80,0.9)' : 'rgba(255,152,0,0.95)';
         }
       });
-
       return true;
-    } catch (e) {
-      // If "Firebase App named '[DEFAULT]' already exists", treat as initialized
-      if (String(e).includes('already exists')) {
-        try {
-          this.db = firebase.database();
-          this.initialized = true;
-          console.log('[Firebase] ✓ already initialized — reusing app');
-          return true;
-        } catch (e2) {
-          console.error('[Firebase] init recover failed:', e2);
-        }
-      }
-      console.error('[Firebase] init error:', e);
+    } catch (error) {
+      this.initialized = false;
+      this.db = null;
+      this.reportError(error);
       return false;
     }
   }
@@ -73,8 +69,11 @@ class FirebaseManager {
       notice.style.cssText = 'position:fixed;top:40px;left:10px;right:10px;z-index:100000;background:#8b2020;color:white;padding:12px;border-radius:8px;';
       document.body.appendChild(notice);
     }
+    const authDisabled = /auth\/(operation-not-allowed|admin-restricted-operation|configuration-not-found)/.test(String(error && error.code || ''));
     const denied = /permission|denied/i.test(String(error && (error.code || error.message) || error));
-    notice.textContent = denied
+    notice.textContent = authDisabled
+      ? 'Anonymous sign-in is not enabled for this game. Ask the teacher to enable Anonymous in Firebase Authentication → Sign-in method, then reload this page.'
+      : denied
       ? 'Multiplayer access was denied by Firebase. Ask the teacher to check this project’s Realtime Database rules. Players cannot join until access is restored.'
       : 'Multiplayer could not synchronise. Check your connection and retry. ' + (error.message || '');
   }
@@ -99,6 +98,7 @@ class FirebaseManager {
   // Resolve a name to ONE shared ID. Transactions retry concurrent joins, and
   // preserve existing records and scores instead of overwriting them on rejoin.
   async registerPlayer(playerName, preferredId) {
+    if (this._initializing) await this._initializing;
     if (!this.db) throw new Error('The multiplayer service is not available. Reload the page and try again.');
     const name = String(playerName || '').trim();
     if (!name) throw new Error('Enter a player name.');

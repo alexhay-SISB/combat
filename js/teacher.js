@@ -730,6 +730,9 @@ const Teacher = {
       console.log(`[Teacher] Published app version v${window.APP_VERSION} for auto-update.`);
     }
 
+    // Authentication is asynchronous; settings may have loaded before it finished.
+    this.publishQuestionsToFirebase();
+
     // Re-init spectator's Firebase hook now that it's available
     if (typeof Spectator !== 'undefined' && Spectator.attachFirebase) {
       Spectator.attachFirebase();

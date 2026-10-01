@@ -59,4 +59,28 @@ test('finishing an old match never overwrites a newer pairing',async()=>{const d
 test('permission denial does not falsely enter lobby and displays explanation',async()=>{const db=new Database(),a=client(db,'student');db.denied=true;await a.ctx.Student.joinLobby('Alex');assert.equal(a.ctx.Student.myStudentId,null);assert.equal(a.ctx.Student.state,'name');assert.equal(a.element('lobby-join-btn').disabled,false);assert.match(a.ctx.document.getElementById('sync-error').textContent,/denied/)});
 test('server confirmation timeout is reported and does not claim success',async()=>{const a=client(new Database(),'student');await assert.rejects(a.ctx.FB.confirmWithin(new Promise(()=>{}),5),/timed out/)});
 test('all local HTML script, stylesheet and navigation paths exist',()=>{for(const file of ['index.html','student.html','teacher.html']){const html=fs.readFileSync(path.join(root,file),'utf8');for(const m of html.matchAll(/(?:src|href)="([^"#]+)"/g)){if(/^https?:/.test(m[1]))continue;assert(fs.existsSync(path.join(root,m[1].split('?')[0])),`${file}: ${m[1]}`)}}});
+test('Firebase startup signs in before enabling database writes',async()=>{
+ const db=new Database(),a=client(db,'student');db.denied=true;
+ let release,calls=0;const auth={currentUser:null,signInAnonymously(){calls++;return new Promise(resolve=>{release=()=>{auth.currentUser={uid:'anonymous-test'};db.denied=false;resolve({user:auth.currentUser})}})}};
+ a.ctx.firebase.apps=[];a.ctx.firebase.initializeApp=()=>a.ctx.firebase.apps.push({});a.ctx.firebase.auth=()=>auth;a.ctx.window.firebase=a.ctx.firebase;a.ctx.FB.initialized=false;a.ctx.FB.db=null;
+ const first=a.ctx.FB.init({}),second=a.ctx.FB.init({});
+ assert.equal(a.ctx.FB.isInitialized(),false);assert.equal(a.ctx.FB.db,null);assert.equal(calls,1);
+ const joining=a.ctx.Student.joinLobby('Alex');assert.equal(a.ctx.Student.myStudentId,null);
+ release();assert(await first);assert(await second);await joining;
+ assert(a.ctx.Student.myStudentId);assert.equal(a.ctx.Student.state,'waiting');assert.equal(calls,1);
+});
+test('existing authenticated session is reused',async()=>{
+ const a=client(new Database(),'student');a.ctx.FB.initialized=false;a.ctx.FB.db=null;
+ a.ctx.firebase.apps=[{}];a.ctx.firebase.initializeApp=()=>{throw Error('duplicate app')};a.ctx.firebase.auth=()=>({currentUser:{uid:'existing'},signInAnonymously(){throw Error('unnecessary sign-in')}});a.ctx.window.firebase=a.ctx.firebase;
+ assert(await a.ctx.FB.init({}));assert(a.ctx.FB.isInitialized());
+});
+test('disabled anonymous provider blocks joins with a specific setup message',async()=>{
+ const a=client(new Database(),'student');a.ctx.FB.initialized=false;a.ctx.FB.db=null;
+ a.ctx.firebase.apps=[{}];a.ctx.firebase.initializeApp=()=>{};a.ctx.firebase.auth=()=>({currentUser:null,signInAnonymously:()=>Promise.reject(Object.assign(Error('Disabled'),{code:'auth/operation-not-allowed'}))});a.ctx.window.firebase=a.ctx.firebase;
+ assert.equal(await a.ctx.FB.init({}),false);assert.equal(a.ctx.FB.db,null);await a.ctx.Student.joinLobby('Alex');
+ assert.equal(a.ctx.Student.myStudentId,null);assert.match(a.ctx.document.getElementById('sync-error').textContent,/enable Anonymous/);
+});
+test('both entry pages load the authentication SDK before Firebase manager',()=>{
+ for(const file of ['student.html','teacher.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert(html.indexOf('firebase-auth-compat.js')>html.indexOf('firebase-app-compat.js'));assert(html.indexOf('firebase-auth-compat.js')<html.indexOf('js/firebase.js?'));assert(html.includes('APP_VERSION = 28'));}
+});
 (async()=>{let failed=0;const selected=tests.filter(([name])=>!process.env.TEST_FILTER || new RegExp(process.env.TEST_FILTER).test(name));for(const [name,fn]of selected){try{await fn();console.log('PASS',name)}catch(e){failed++;console.error('FAIL',name,e.stack)}}console.log(`${selected.length-failed}/${selected.length} tests passed (isolated clients; simulated database, not a live browser).`);process.exitCode=failed?1:0})();

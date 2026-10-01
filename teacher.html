@@ -10,9 +10,9 @@
   <title>Combat — Teacher Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <!-- Build number for the auto-update system (must match the ?v= below). -->
-  <script>window.APP_VERSION = 27;</script>
-  <link rel="stylesheet" href="css/style.css?v=27" />
-  <link rel="stylesheet" href="css/teacher.css?v=27" />
+  <script>window.APP_VERSION = 28;</script>
+  <link rel="stylesheet" href="css/style.css?v=28" />
+  <link rel="stylesheet" href="css/teacher.css?v=28" />
 </head>
 <body class="teacher-body">
   <div class="teacher-shell">
@@ -182,30 +182,30 @@
 
   <!-- Firebase SDK (compat = v8-style API exposed as window.firebase) -->
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
   <!-- Firebase config & manager (v=2 cache-bust) -->
-  <script src="js/firebase-config.js?v=27"></script>
-  <script src="js/firebase.js?v=27"></script>
+  <script src="js/firebase-config.js?v=28"></script>
+  <script src="js/firebase.js?v=28"></script>
 
   <!-- Auto-update watcher: reloads stale devices automatically -->
-  <script src="js/version-check.js?v=27"></script>
+  <script src="js/version-check.js?v=28"></script>
 
   <!-- Teacher scripts -->
-  <script src="js/csv.js?v=27"></script>
-  <script src="js/questions.js?v=27"></script>
-  <script src="js/teacher.js?v=27"></script>
+  <script src="js/csv.js?v=28"></script>
+  <script src="js/questions.js?v=28"></script>
+  <script src="js/teacher.js?v=28"></script>
 
   <!-- Initialize Firebase for teacher dashboard BEFORE Teacher.init() -->
   <script>
-    // Synchronous init since compat SDK is synchronous.
-    // Important: this must run before the DOMContentLoaded handler in teacher.js
+    // Start anonymous authentication. Teacher listeners wait until it completes.
     if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY' && window.firebase) {
       Firebase.init(FIREBASE_CONFIG).then(ok => {
         console.log(ok ? '%c[Teacher] Firebase ✓' : '%c[Teacher] Firebase FAILED',
                     ok ? 'color:#4caf50;font-weight:bold' : 'color:#f44336;font-weight:bold');
         // If Teacher already initialized (DOMContentLoaded fired first), wire Firebase listeners now
-        if (window.Teacher && typeof Teacher.attachFirebaseListeners === 'function') {
+        if (typeof Teacher !== 'undefined' && typeof Teacher.attachFirebaseListeners === 'function') {
           Teacher.attachFirebaseListeners();
         }
       });

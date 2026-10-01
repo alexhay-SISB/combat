@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v27';
+const LOBBY_VERSION = 'v28';
 
 const StudentLobby = {
   myStudentId: null,
@@ -89,8 +89,9 @@ const StudentLobby = {
     const label = button.textContent;
     button.textContent = 'Joining…';
     try {
+      if (typeof Firebase !== 'undefined' && Firebase._initializing) await Firebase._initializing;
       if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) {
-        throw new Error('Multiplayer is not ready. Check your connection and reload the page.');
+        throw (typeof Firebase !== 'undefined' && Firebase.lastError) || new Error('Multiplayer is not ready. Check your connection and reload the page.');
       }
       // Joining succeeds only after the shared database confirms the identity.
       const player = await Firebase.registerPlayer(name);
