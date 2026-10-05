@@ -1,3 +1,14 @@
+# v29 security repair
+
+- Google teacher sign-in restricted by verified token to alexander.hay@sisbschool.com. Separate anonymous student sessions and teacher-approved membership.
+- Default-deny database rules with per-player and per-match permissions.
+- Preserve existing player identities and scores when approving devices.
+- Only the teacher applies shared results, atomically and once; clients cannot change other players or the question bank.
+- Preserve both networked quiz scores in match results (the opponent’s score previously saved as zero).
+- Fix cloud stat reset, failed-wipe reporting, spectator listener cleanup and Firebase empty bullet lists. Stop host simulation immediately at match end so the final state is not overwritten.
+- Escape player names and spectator values when rendering HTML.
+- Deploy the matching code and rules using SECURITY_SETUP.md. Existing Firebase config, controls, scoring, visuals, and question format are retained.
+
 # Multiplayer repair — build 28
 
 The teacher and student previously generated different local IDs for the same

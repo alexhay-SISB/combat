@@ -64,7 +64,7 @@
   }
 
   function subscribe() {
-    if (typeof Firebase === 'undefined' || !Firebase.isInitialized || !Firebase.isInitialized()) {
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized || !Firebase.isInitialized() || !Firebase.classReady) {
       return setTimeout(subscribe, 500); // retry until Firebase is ready
     }
     if (typeof Firebase.listenToAppVersion === 'function') {

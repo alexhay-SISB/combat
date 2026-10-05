@@ -3,7 +3,7 @@
 
 // Bumped on every release; logged + shown as a tiny badge so we can tell at a
 // glance whether a device is running stale cached JS.
-const LOBBY_VERSION = 'v28';
+const LOBBY_VERSION = 'v29';
 
 const StudentLobby = {
   myStudentId: null,
@@ -87,7 +87,7 @@ const StudentLobby = {
     const button = document.getElementById('lobby-join-btn');
     button.disabled = true;
     const label = button.textContent;
-    button.textContent = 'Joining…';
+    button.textContent = 'Waiting for teacher approval…';
     try {
       if (typeof Firebase !== 'undefined' && Firebase._initializing) await Firebase._initializing;
       if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) {
@@ -99,6 +99,7 @@ const StudentLobby = {
       this.myName = player.name;
       sessionStorage.setItem('combat:myStudentId', player.id);
       sessionStorage.setItem('combat:myName', player.name);
+      this.tryAttachFirebaseListener();
       this.enterWaiting();
       this.checkForActiveMatch();
     } catch (error) {
@@ -172,7 +173,7 @@ const StudentLobby = {
     if (others.length === 0) {
       info.innerHTML = `You're first in the lobby. Waiting for others to join…`;
     } else {
-      const names = others.slice(0, 6).map(p => p.name).join(' · ');
+      const names = others.slice(0, 6).map(p => CombatAccess.escape(p.name)).join(' · ');
       const more = others.length > 6 ? ` +${others.length - 6} more` : '';
       info.innerHTML = `<b>${players.length}</b> player${players.length === 1 ? '' : 's'} in lobby:<br>${names}${more}`;
     }
@@ -191,7 +192,7 @@ const StudentLobby = {
   },
 
   tryAttachFirebaseListener() {
-    if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isInitialized() || !Firebase.classReady) return;
 
     if (!this.firebaseListenerActive) {
       console.log('[Lobby] ✓ Attaching Firebase listener for pairings');
@@ -269,7 +270,7 @@ const StudentLobby = {
       return `
         <tr class="${isMe ? 'me' : ''}">
           <td>${i + 1}</td>
-          <td class="lb-name">${p.name}${isMe ? ' <span class="me-tag">YOU</span>' : ''}</td>
+          <td class="lb-name">${CombatAccess.escape(p.name)}${isMe ? ' <span class="me-tag">YOU</span>' : ''}</td>
           <td>${p.wins || 0}</td>
           <td>${p.losses || 0}</td>
           <td>${p.kills || 0}</td>

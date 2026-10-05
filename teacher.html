@@ -10,12 +10,18 @@
   <title>Combat — Teacher Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <!-- Build number for the auto-update system (must match the ?v= below). -->
-  <script>window.APP_VERSION = 28;</script>
-  <link rel="stylesheet" href="css/style.css?v=28" />
-  <link rel="stylesheet" href="css/teacher.css?v=28" />
+  <script>window.APP_VERSION = 29; window.COMBAT_TEACHER = true;</script>
+  <link rel="stylesheet" href="css/style.css?v=29" />
+  <link rel="stylesheet" href="css/teacher.css?v=29" />
 </head>
 <body class="teacher-body">
-  <div class="teacher-shell">
+  <section id="teacher-auth" class="card" style="max-width:560px;margin:60px auto;padding:28px">
+    <h1>COMBAT · Teacher sign-in</h1>
+    <p>Sign in as alexander.hay@sisbschool.com to manage your class.</p>
+    <button id="teacher-sign-in" class="open-game-btn">Sign in with Google</button>
+    <p id="teacher-auth-message" role="status"></p>
+  </section>
+  <div class="teacher-shell" hidden>
 
     <!-- Header -->
     <header class="teacher-header">
@@ -26,6 +32,12 @@
       <a href="index.html" class="open-game-btn">← Home</a>
     </header>
 
+    <section class="card" style="margin:16px 0;padding:18px">
+      <h2>Student join requests</h2>
+      <p>Approve each student's device once. Keep this dashboard open during play so results update.</p>
+      <div id="join-requests">No students waiting.</div>
+      <button id="teacher-sign-out" class="ghost-btn small">Sign out</button>
+    </section>
     <!-- Centered Wipe-Everything button -->
     <div class="wipe-bar">
       <button id="wipe-everything-btn" class="wipe-btn" title="Clear all games, players, records, and questions">
@@ -186,33 +198,19 @@
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-database-compat.js"></script>
 
   <!-- Firebase config & manager (v=2 cache-bust) -->
-  <script src="js/firebase-config.js?v=28"></script>
-  <script src="js/firebase.js?v=28"></script>
+  <script src="js/firebase-config.js?v=29"></script>
+  <script src="js/firebase.js?v=29"></script>
+  <script src="js/security.js?v=29"></script>
 
   <!-- Auto-update watcher: reloads stale devices automatically -->
-  <script src="js/version-check.js?v=28"></script>
+  <script src="js/version-check.js?v=29"></script>
 
   <!-- Teacher scripts -->
-  <script src="js/csv.js?v=28"></script>
-  <script src="js/questions.js?v=28"></script>
-  <script src="js/teacher.js?v=28"></script>
+  <script src="js/csv.js?v=29"></script>
+  <script src="js/questions.js?v=29"></script>
+  <script src="js/teacher.js?v=29"></script>
 
-  <!-- Initialize Firebase for teacher dashboard BEFORE Teacher.init() -->
-  <script>
-    // Start anonymous authentication. Teacher listeners wait until it completes.
-    if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY' && window.firebase) {
-      Firebase.init(FIREBASE_CONFIG).then(ok => {
-        console.log(ok ? '%c[Teacher] Firebase ✓' : '%c[Teacher] Firebase FAILED',
-                    ok ? 'color:#4caf50;font-weight:bold' : 'color:#f44336;font-weight:bold');
-        // If Teacher already initialized (DOMContentLoaded fired first), wire Firebase listeners now
-        if (typeof Teacher !== 'undefined' && typeof Teacher.attachFirebaseListeners === 'function') {
-          Teacher.attachFirebaseListeners();
-        }
-      });
-    } else {
-      console.warn('Firebase config not set or SDK missing; using localStorage only');
-    }
-  </script>
+  <script>document.addEventListener('DOMContentLoaded', () => CombatAccess.startTeacher());</script>
 </body>
 </html>
 

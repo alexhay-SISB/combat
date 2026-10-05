@@ -26,16 +26,23 @@ class FirebaseManager {
       if (!window.firebase || !firebase.initializeApp || !firebase.auth) {
         throw new Error('Firebase could not load. Check your connection and reload this page.');
       }
-      if (!firebase.apps.length) firebase.initializeApp(config);
-      const auth = firebase.auth();
+      const appName = window.COMBAT_TEACHER ? '[DEFAULT]' : 'combat-student';
+      this.app = firebase.apps.find(app => app.name === appName) ||
+        (window.COMBAT_TEACHER ? firebase.initializeApp(config) : firebase.initializeApp(config, appName));
+      const auth = this.app.auth();
+      await new Promise(resolve => { const off = auth.onAuthStateChanged(() => { off(); resolve(); }); });
+      if (window.COMBAT_TEACHER && !CombatAccess.isTeacher(auth.currentUser)) {
+        throw new Error('Sign in with the authorised teacher Google account.');
+      }
       if (!auth.currentUser) {
         await this.confirmWithin(auth.signInAnonymously());
       }
       if (!auth.currentUser) throw new Error('Firebase sign-in could not be confirmed. Reload and try again.');
-      this.db = firebase.database();
+      this.db = this.app.database();
+      this.classReady = !!window.COMBAT_TEACHER;
       this.initialized = true;
       this.clearError();
-      console.log('[Firebase] Anonymous session ready — tournament:', this.tournamentId);
+      console.log('[Firebase] Authenticated — tournament:', this.tournamentId);
 
       this.db.ref('.info/connected').on('value', snap => {
         this.connected = !!snap.val();
@@ -97,7 +104,7 @@ class FirebaseManager {
 
   // Resolve a name to ONE shared ID. Transactions retry concurrent joins, and
   // preserve existing records and scores instead of overwriting them on rejoin.
-  async registerPlayer(playerName, preferredId) {
+  async registerTeacherPlayer(playerName, preferredId) {
     if (this._initializing) await this._initializing;
     if (!this.db) throw new Error('The multiplayer service is not available. Reload the page and try again.');
     const name = String(playerName || '').trim();
@@ -133,7 +140,15 @@ class FirebaseManager {
 
   async setPlayerActive(playerId, active) {
     if (!this.db) throw new Error('The multiplayer service is not available.');
-    await this.db.ref(`tournaments/${this.tournamentId}/players/${playerId}`).update({ active });
+    const base = `tournaments/${this.tournamentId}`;
+    if (window.COMBAT_TEACHER && !active) {
+      const player = (await this.db.ref(`${base}/players/${playerId}`).once('value')).val();
+      const updates = { [`players/${playerId}/active`]: false, [`players/${playerId}/ownerUid`]: null };
+      if (player?.ownerUid) updates[`members/${player.ownerUid}`] = null;
+      await this.db.ref(base).update(updates);
+    } else {
+      await this.db.ref(`${base}/players/${playerId}/active`).set(active);
+    }
   }
 
   listenToPlayers(callback) {
@@ -176,7 +191,17 @@ class FirebaseManager {
       pairingsArray.forEach((pairing, idx) => {
         pairingsObj[`match${idx}`] = pairing;
       });
-      await this.confirmWithin(this.db.ref(`tournaments/${this.tournamentId}/pairings`).set(pairingsObj));
+      const players = (await this.db.ref(`tournaments/${this.tournamentId}/players`).once('value')).val() || {};
+      const access = {};
+      for (const pair of pairingsArray) {
+        if (pair.status === 'bye') continue;
+        const p1 = players[pair.p1Id], p2 = players[pair.p2Id];
+        if (!p1?.ownerUid || !p2?.ownerUid) throw new Error('Both players must join on their devices and be approved before starting the round.');
+        access[pair.matchId] = { p1Uid: p1.ownerUid, p2Uid: p2.ownerUid,
+          p1Id: pair.p1Id, p2Id: pair.p2Id, p1Name: p1.name, p2Name: p2.name,
+          active: pair.status === 'in_progress' };
+      }
+      await this.confirmWithin(this.db.ref(`tournaments/${this.tournamentId}`).update({pairings: pairingsObj, matchAccess: access}));
       this.clearError();
       return true;
     } catch (e) {
@@ -317,70 +342,14 @@ class FirebaseManager {
   //   p1Kills, p2Kills — kills delta to add to each player's running total
   //   p1QuizScore, p2QuizScore — quiz score delta to add
   async endMatch(matchId, p1Id, p2Id, p1Name, p2Name, winnerName, p1Kills, p2Kills, p1QuizScore, p2QuizScore) {
-    if (!this.db) return false;
     try {
-      const result = {
-        winner: winnerName || null,
-        p1Id, p2Id, p1Name, p2Name,
-        p1Kills, p2Kills,
-        p1QuizScore, p2QuizScore,
-        endTime: firebase.database.ServerValue.TIMESTAMP,
-        status: 'completed'
-      };
-
-      // Update match record
-      await this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}`).update(result);
-
-      // Update player stats (read-modify-write — keyed by player ID, NOT name, so the
-      // record stays the SAME row created by addPlayer()).
-      const p1Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p1Id}`);
-      const p2Ref = this.db.ref(`tournaments/${this.tournamentId}/players/${p2Id}`);
-
-      // Player 1 update
-      const p1Snap = await p1Ref.once('value');
-      const p1Data = p1Snap.val() || { wins: 0, losses: 0, quizScore: 0, kills: 0 };
-      p1Data.name = p1Name;                                            // ensure name present
-      p1Data.kills = (p1Data.kills || 0) + (p1Kills || 0);
-      p1Data.quizScore = (p1Data.quizScore || 0) + (p1QuizScore || 0);
-      if (winnerName && p1Name && winnerName === p1Name) {
-        p1Data.wins = (p1Data.wins || 0) + 1;
-      } else if (winnerName && p2Name && winnerName === p2Name) {
-        p1Data.losses = (p1Data.losses || 0) + 1;
-      }
-      p1Data.rating = (p1Data.wins || 0) * 100 + (p1Data.kills || 0) * 5 + (p1Data.quizScore || 0);
-      await p1Ref.update(p1Data);
-
-      // Player 2 update
-      const p2Snap = await p2Ref.once('value');
-      const p2Data = p2Snap.val() || { wins: 0, losses: 0, quizScore: 0, kills: 0 };
-      p2Data.name = p2Name;
-      p2Data.kills = (p2Data.kills || 0) + (p2Kills || 0);
-      p2Data.quizScore = (p2Data.quizScore || 0) + (p2QuizScore || 0);
-      if (winnerName && p2Name && winnerName === p2Name) {
-        p2Data.wins = (p2Data.wins || 0) + 1;
-      } else if (winnerName && p1Name && winnerName === p1Name) {
-        p2Data.losses = (p2Data.losses || 0) + 1;
-      }
-      p2Data.rating = (p2Data.wins || 0) * 100 + (p2Data.kills || 0) * 5 + (p2Data.quizScore || 0);
-      await p2Ref.update(p2Data);
-
-      // Update only this match's pairing; don't overwrite a newer round.
-      await this.db.ref(`tournaments/${this.tournamentId}/pairings`).transaction(pairings => {
-        if (!pairings) return;
-        for (const pair of Object.values(pairings)) {
-          if (pair && pair.matchId === matchId) {
-            Object.assign(pair, { status: 'done', winner: winnerName || 'draw',
-              p1Kills, p2Kills, p1QuizScore, p2QuizScore });
-          }
-        }
-        return pairings;
-      }, undefined, false);
-
+      // The host submits only this match's result. The teacher applies stats once.
+      await this.db.ref(`tournaments/${this.tournamentId}/matches/${matchId}/result`).set({
+        winner: winnerName === p1Name ? 1 : winnerName === p2Name ? 2 : 0,
+        p1Kills, p2Kills, p1QuizScore, p2QuizScore
+      });
       return true;
-    } catch (e) {
-      console.error('Failed to end match:', e);
-      return false;
-    }
+    } catch (error) { this.reportError(error); return false; }
   }
 
   // ===== Leaderboard (Aggregated from players) =====
