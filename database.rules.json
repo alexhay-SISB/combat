@@ -1,0 +1,92 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "tournaments": {
+      "default": {
+        ".read": "auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'",
+        ".write": "auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'",
+        "members": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid"
+          }
+        },
+        "joinRequests": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && newData.exists()",
+            ".validate": "(auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com') || newData.hasChildren(['name','status'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "status": {
+              ".validate": "(auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com') || newData.val() === 'pending'"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "players": {
+          ".read": "auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()",
+          "$id": {
+            "active": {
+              ".write": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && root.child('tournaments/default').child('members').child(auth.uid).child('playerId').val() === $id && data.parent().child('ownerUid').val() === auth.uid && newData.isBoolean()"
+            }
+          }
+        },
+        "pairings": {
+          ".read": "auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()"
+        },
+        "questionBank": {
+          ".read": "auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()"
+        },
+        "appVersion": {
+          ".read": "auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()"
+        },
+        "matches": {
+          "$match": {
+            ".read": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && (root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid || root.child('tournaments/default').child('matchAccess').child($match).child('p2Uid').val() === auth.uid)",
+            "state": {
+              ".write": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && root.child('tournaments/default').child('matchAccess').child($match).child('active').val() === true && root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid && newData.exists()",
+              ".validate": "(auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com') || (newData.child('matchId').val() === $match && (newData.child('type').val() === 'state-update' || newData.child('type').val() === 'match-end'))"
+            },
+            "inputs": {
+              "$slot": {
+                ".write": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && (root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid || root.child('tournaments/default').child('matchAccess').child($match).child('p2Uid').val() === auth.uid) && root.child('tournaments/default').child('matchAccess').child($match).child('active').val() === true && (($slot === 'p1' && root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid) || ($slot === 'p2' && root.child('tournaments/default').child('matchAccess').child($match).child('p2Uid').val() === auth.uid)) && newData.exists()"
+              }
+            },
+            "quizScores": {
+              "$slot": {
+                ".write": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && (root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid || root.child('tournaments/default').child('matchAccess').child($match).child('p2Uid').val() === auth.uid) && root.child('tournaments/default').child('matchAccess').child($match).child('active').val() === true && (($slot === 'p1' && root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid) || ($slot === 'p2' && root.child('tournaments/default').child('matchAccess').child($match).child('p2Uid').val() === auth.uid)) && newData.exists()",
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && newData.val() % 1 === 0"
+              }
+            },
+            "result": {
+              ".write": "(auth != null && root.child('tournaments/default').child('members').child(auth.uid).exists()) && root.child('tournaments/default').child('matchAccess').child($match).child('active').val() === true && root.child('tournaments/default').child('matchAccess').child($match).child('p1Uid').val() === auth.uid && !data.exists() && newData.exists()",
+              ".validate": "(auth != null && auth.token.email === 'alexander.hay@sisbschool.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com') || newData.hasChildren(['winner','p1Kills','p2Kills','p1QuizScore','p2QuizScore'])",
+              "winner": {
+                ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1 || newData.val() === 2)"
+              },
+              "$other": {
+                ".validate": false
+              },
+              "p1Kills": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && newData.val() % 1 === 0"
+              },
+              "p2Kills": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && newData.val() % 1 === 0"
+              },
+              "p1QuizScore": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && newData.val() % 1 === 0"
+              },
+              "p2QuizScore": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && newData.val() % 1 === 0"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

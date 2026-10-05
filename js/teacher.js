@@ -68,7 +68,7 @@ const Leaderboard = {
     tbody.innerHTML = players.map((p, i) => `
       <tr>
         <td class="rank-cell">${i + 1}</td>
-        <td class="name-cell">${p.name}</td>
+        <td class="name-cell">${CombatAccess.escape(p.name)}</td>
         <td>${p.wins || 0}</td>
         <td>${p.losses || 0}</td>
         <td>${p.kills || 0}</td>
@@ -76,8 +76,10 @@ const Leaderboard = {
     `).join('');
   },
 
-  reset() {
+  async reset() {
     if (!confirm('Reset all player stats? Cumulative wins, kills, and quiz scores will be cleared.')) return;
+    try { await Firebase.resetStats(); }
+    catch (error) { Firebase.reportError(error); return; }
     localStorage.removeItem(STORAGE_KEYS.leaderboard);
     this.render();
     Lobby.render();
@@ -191,7 +193,7 @@ const Lobby = {
       const rating = Leaderboard.computeRating(stats);
       return `
         <div class="player-tag" data-id="${p.id}">
-          <span class="player-tag-name">${p.name}</span>
+          <span class="player-tag-name">${CombatAccess.escape(p.name)}</span>
           <span class="player-tag-stats">W:${stats.wins || 0} · K:${stats.kills || 0} · R:${rating}</span>
           <button class="remove-btn" data-id="${p.id}" title="Remove">×</button>
         </div>
@@ -410,9 +412,9 @@ const RoundManager = {
         <div class="pairing-row ${p.status}">
           <div class="pairing-num">#${i + 1}</div>
           <div class="pairing-players">
-            <span class="pairing-p1">${p.p1Name}</span>
+            <span class="pairing-p1">${CombatAccess.escape(p.p1Name)}</span>
             <span class="vs">vs</span>
-            <span class="pairing-p2">${p.p2Name}</span>
+            <span class="pairing-p2">${CombatAccess.escape(p.p2Name)}</span>
           </div>
           <div class="pairing-status">${statusBadge}</div>
           <div class="pairing-action">${actionBtn}</div>
@@ -465,18 +467,26 @@ const Spectator = {
     if (typeof Firebase === 'undefined' || !Firebase.isInitialized()) return;
     this._firebaseAttached = true;
     console.log('[Spectator] ✓ Firebase listener attached for live matches');
-    Firebase.db.ref(`tournaments/${Firebase.tournamentId}/matches`).on('child_changed', (snap) => {
+    Firebase.unlisten('spectator');
+    const ref = Firebase.db.ref(`tournaments/${Firebase.tournamentId}/matches`);
+    const listener = (snap) => {
       const matchId = snap.key;
       const matchData = snap.val();
       if (matchData && matchData.state) {
         this.handleMessage(matchData.state, 'firebase');
       }
-    });
+    };
+    ref.on('child_added', listener);
+    ref.on('child_changed', listener);
+    Firebase.listeners.set('spectator', {unsubscribe: () => { ref.off('child_added', listener); ref.off('child_changed', listener); }});
   },
 
   handleMessage(msg, source = 'bc') {
     if (!msg) return;
     if (msg.type === 'state-update') {
+      const tanks = Array.isArray(msg.tanks) ? msg.tanks : Object.values(msg.tanks || {});
+      if (!tanks[0] || !tanks[1]) return;
+      msg = {...msg, tanks, bullets: Object.values(msg.bullets || {}).filter(b => b && typeof b === 'object')};
       // Dedupe: skip if we already saw this exact timestamp (BC may double-deliver)
       const prevTs = this.lastStateTs.get(msg.matchId);
       if (prevTs && msg.ts === prevTs) return;
@@ -486,7 +496,7 @@ const Spectator = {
       this.lastUpdate.set(msg.matchId, Date.now());
       if (source === 'bc') this.receivedFromBC++; else this.receivedFromLS++;
       this.render();
-    } else if (msg.type === 'match-ended') {
+    } else if (msg.type === 'match-ended' || msg.type === 'match-end') {
       setTimeout(() => {
         this.matches.delete(msg.matchId);
         this.lastUpdate.delete(msg.matchId);
@@ -572,9 +582,9 @@ const Spectator = {
     const p1 = state.tanks[0];
     const p2 = state.tanks[1];
     tile.querySelector('.spec-p1').innerHTML =
-      `<b style="color:#ff5252">${p1.name}</b> · ${p1.kills}K · ${p1.points}p`;
+      `<b style="color:#ff5252">${CombatAccess.escape(p1.name)}</b> · ${CombatAccess.escape(p1.kills)}K · ${CombatAccess.escape(p1.points)}p`;
     tile.querySelector('.spec-p2').innerHTML =
-      `${p2.kills}K · ${p2.points}p · <b style="color:#4fc3f7">${p2.name}</b>`;
+      `${CombatAccess.escape(p2.kills)}K · ${CombatAccess.escape(p2.points)}p · <b style="color:#4fc3f7">${CombatAccess.escape(p2.name)}</b>`;
     const m = Math.floor(state.time / 60);
     const s = Math.floor(state.time % 60);
     tile.querySelector('.spec-time').textContent = `${m}:${s.toString().padStart(2, '0')}`;
@@ -720,6 +730,7 @@ const Teacher = {
       return;
     }
     this._firebaseAttached = true;
+    Firebase.watchSecurity();
     console.log('[Teacher] ✓ Firebase listeners attached');
 
     // Publish this dashboard's build version so student devices on a stale
@@ -842,11 +853,14 @@ const Teacher = {
         if (typeof Spectator !== 'undefined') Spectator._firebaseAttached = false;
 
         // Wipe entire tournament node in Firebase RTDB
-        await Firebase.clearTournament();
+        if (!await Firebase.clearTournament()) throw new Error("Firebase refused to clear the class.");
         firebaseCleared = true;
         console.log('[Teacher] ✓ Firebase tournament cleared');
       } catch (e) {
-        console.warn('[Teacher] Firebase clear failed:', e);
+        Firebase.reportError(e);
+        if (btn) { btn.disabled = false; btn.textContent = '🗑 WIPE EVERYTHING'; }
+        this.attachFirebaseListeners();
+        return;
       }
     }
 
@@ -992,5 +1006,5 @@ const Teacher = {
 
 };
 
-document.addEventListener('DOMContentLoaded', () => Teacher.init());
+// CombatAccess starts the dashboard after verified teacher sign-in.
 

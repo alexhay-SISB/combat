@@ -146,7 +146,7 @@ const Game = {
     const hintEl = document.querySelector('#overlay .hint');
     if (hintEl) {
       hintEl.innerHTML = `Answer questions to earn ammo, then battle!<br>
-        <span class="config-line">📝 ${qSource}${namesText ? '  ·  👥 ' + namesText : ''}</span>`;
+        <span class="config-line">📝 ${qSource}${namesText ? '  ·  👥 ' + CombatAccess.escape(namesText) : ''}</span>`;
     }
   },
 
@@ -418,6 +418,9 @@ const Game = {
     const oppScore = this.opponentQuizScore;
     const p1Score = (this.myPlayerNum === 1) ? myScore : oppScore;
     const p2Score = (this.myPlayerNum === 2) ? myScore : oppScore;
+    // Retain both synced scores for the result screen and persistent leaderboard.
+    this.quizzes[0].score = p1Score;
+    this.quizzes[1].score = p2Score;
     this.startMatch(p1Score, p2Score);
   },
 
@@ -608,6 +611,7 @@ const Game = {
     if (this.timeRemaining <= 0) {
       this.timeRemaining = 0;
       this.endMatch();
+      return; // Do not overwrite the final state or write after results are applied.
     }
 
     // In host mode, override input.p2 with remote input from client
@@ -1145,19 +1149,19 @@ const Game = {
     const content = overlay ? overlay.querySelector('.overlay-content') : null;
     if (content) {
       content.innerHTML = `
-        <h1>${winnerText}</h1>
+        <h1>${CombatAccess.escape(winnerText)}</h1>
         <p class="subtitle">Match Over · saved to leaderboard</p>
         <div class="controls-help">
           <div class="control-block">
-            <h3>${t1.name}</h3>
-            <p>Kills: <b>${t1.kills}</b></p>
+            <h3>${CombatAccess.escape(t1.name)}</h3>
+            <p>Kills: <b>${CombatAccess.escape(t1.kills)}</b></p>
             <p>Quiz score: <b>${this.quizzes[0] ? this.quizzes[0].score : '—'}</b></p>
             <p>Quiz correct: <b>${this.quizzes[0] ? this.quizzes[0].correct + '/' + this.quizzes[0].answered : '—'}</b></p>
             ${this.quizzes[0] ? `<p>Best streak: <b>${this.quizzes[0].bestStreak}</b></p>` : ''}
           </div>
           <div class="control-block">
-            <h3>${t2.name}</h3>
-            <p>Kills: <b>${t2.kills}</b></p>
+            <h3>${CombatAccess.escape(t2.name)}</h3>
+            <p>Kills: <b>${CombatAccess.escape(t2.kills)}</b></p>
             <p>Quiz score: <b>${this.quizzes[1] ? this.quizzes[1].score : '—'}</b></p>
             <p>Quiz correct: <b>${this.quizzes[1] ? this.quizzes[1].correct + '/' + this.quizzes[1].answered : '—'}</b></p>
             ${this.quizzes[1] ? `<p>Best streak: <b>${this.quizzes[1].bestStreak}</b></p>` : ''}
